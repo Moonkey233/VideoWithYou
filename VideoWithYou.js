@@ -4,7 +4,7 @@
 // @version      0.9.0
 // @description  Different places, same video. A script that controls the synchronous play of video websites.
 // @author       Moonkey_ & Iris
-// @match        https://www.bilibili.com/video/*
+// @match        https://www.bilibili.com/*
 // @icon         icon
 // @grant        GM_addStyle
 // ==/UserScript==
