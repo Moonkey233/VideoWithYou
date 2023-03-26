@@ -24,7 +24,7 @@ var count = 0;
 
 class MyPlayer {
 	constructor() {
-		
+
 	}
 
 	getType() {
@@ -42,7 +42,7 @@ class MyPlayer {
 			return (typeof player == 'undefined');
 		} else if (this.type == 'youku') {
 			return (typeof videoPlayer == 'undefined');
-		} 
+		}
 	}
 
 	isPaused() {
@@ -51,7 +51,7 @@ class MyPlayer {
 			return player.isPaused();
 		} else if (this.type == 'youku') {
 			return (videoPlayer.getPlayerState().state == 'paused');
-		} 
+		}
 	}
 
 	isEnded() {
@@ -60,7 +60,7 @@ class MyPlayer {
 			return player.isEnded();
 		} else if (this.type == 'youku') {
 			return videoPlayer.isEnd;
-		} 
+		}
 	}
 
 	getCurrentTime() {
@@ -69,7 +69,7 @@ class MyPlayer {
 			return player.getCurrentTime();
 		} else if (this.type == 'youku') {
 			return videoPlayer.getCurrentTime();
-		} 
+		}
 	}
 
 	seek(time) {
@@ -78,7 +78,7 @@ class MyPlayer {
 			player.seek(time);
 		} else if (this.type == 'youku') {
 			videoPlayer.seek(time);
-		} 
+		}
 	}
 
 	play() {
@@ -87,7 +87,7 @@ class MyPlayer {
 			player.play();
 		} else if (this.type == 'youku') {
 			videoPlayer.play();
-		} 
+		}
 	}
 
 	pause() {
@@ -96,7 +96,7 @@ class MyPlayer {
 			player.pause();
 		} else if (this.type == 'youku') {
 			videoPlayer.pause();
-		} 
+		}
 	}
 
 	getPlaybackRate() {
@@ -105,7 +105,7 @@ class MyPlayer {
 			return player.getPlaybackRate();
 		} else if (this.type == 'youku') {
 			return 1;
-		} 
+		}
 	}
 
 	setPlaybackRate(rate) {
@@ -114,7 +114,7 @@ class MyPlayer {
 			player.setPlaybackRate(rate);
 		} else if (this.type == 'youku') {
 			//pass
-		} 
+		}
 	}
 }
 
@@ -136,6 +136,7 @@ var roomInfo = document.createElement('span');
 var roomId = document.createElement('span');
 var lastTime = document.createElement('span');
 var lastMsg = document.createElement('span');
+var icon = document.createElement('span');
 
 var global = {
 	roomHostFlag: true,
@@ -155,7 +156,6 @@ var global = {
 		global = {
 			roomHostFlag: true,
 			connectedFlag: false,
-			serverCurrentDtime: 0,
 			sessionUuid: '',
 			userName: '',
 			roomName: '',
@@ -166,12 +166,10 @@ var global = {
 
 	if ((global.roomHostFlag && new Date().getTime() - global.saveTime >= 5000) || (!global.roomHostFlag && global.saveTime != -1)) {
 		console.log('new');
-		console.log(global.hostNumber);
 		initPanel();
 		global.sessionUuid = generateUuid();
 		global.hostNumber++;
 		global.connectedFlag = false;
-		console.log(global);
 	} else {
 		console.log('old');
 		initPanel();
@@ -192,13 +190,13 @@ function connectServer(url = "127.0.0.1", port = 1206) {
 	ws = new WebSocket(`wss://${url}:${port}`, 'undefined', {
 		// 指定自定义的CA证书
 		ca: `-----BEGIN CERTIFICATE-----\nMIIDazCCAlOgAwIBAgIUTASMYRLAkZ4LmtRwxETkME5IxhUwDQYJKoZIhvcNAQELBQAwRTELMAkGA1UEBhMCQVUxEzARBgNVBAgMClNvbWUtU3RhdGUxITAfBgNVBAoMGEludGVybmV0IFdpZGdpdHMgUHR5IEx0ZDAeFw0yMzAzMjYwMTQwMTRaFw0zMzAzMjMwMTQwMTRaMEUxCzAJBgNVBAYTAkFVMRMwEQYDVQQIDApTb21lLVN0YXRlMSEwHwYDVQQKDBhJbnRlcm5ldCBXaWRnaXRzIFB0eSBMdGQwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDXVETZNw1lHoHDTOGFsEEiANFSxZRPfvQUsk1ZmLdu5vb1wdkgR0/7r5J3Bu2Q5ilzZVWgkv7Esge2P5o9SVLjFf+zZp+g/GNukHRDih7qiKqJ/NP/9pcsmyJ4O6zr6Q4mlK2FUR+lRCOTsZvA5ZvO1y+ggrGNVfDgqSrDE13ND9XloCVNO0v7R3SFiWW3iUYa1LVaBxkfnhedpMRX+kovs0ASsaL7agRWIAyVo5tNHDBu8UxG+M2/WwseO8Aa0YbfL8ixfZ69uN7/nWF283jUMHFc39ZXUane3nm88pUHWO/P1grqrlD/8MZeduHcQ9gAJJ/iCFi7Xalm3jHWY6z7AgMBAAGjUzBRMB0GA1UdDgQWBBT5t5c19GpAtSdLKylSCX+Hmq3wcTAfBgNVHSMEGDAWgBT5t5c19GpAtSdLKylSCX+Hmq3wcTAPBgNVHRMBAf8EBTADAQH/MA0GCSqGSIb3DQEBCwUAA4IBAQBtNbwpKoem3px4r23WDvAC0cBH46JMR4+liwC9zrULW4pVmdXR2NHHmhpCxgHcZb83NTJPE03YsOIAC3qesoErwQMc1lNM3wRWATzEPasJYdaYJz9nEwN4kBIUeLDjw03IeLNTNv/x4F6rkM/hKRKqpJWPYBbEXZyTEgXmBlpd6LT0EC6eV2PCwhR0RC7iuIo+m3q+rSceQlTJxyUpYab2ULFmKqHyAtgS/UIJT77Fdj5admDf+OypFpVBaqTJOxKU6xzpwQLeBU9rVatgIZHKP4Iscr93QkrMqMvM8NW1r0TSvfcJnzdUH38DQ7RtYvoOpGOZ0LdtXpWJIudJQcte\n-----END CERTIFICATE-----`,
-		rejectUnauthorized:false,
-	  });
+		rejectUnauthorized: false,
+	});
 	console.log('test111');
-	if(reconnectID == 0){
+	if (reconnectID == 0) {
 		wsListener();
 	} else {
-		if(++reconnectCnt >= 5) {
+		if (++reconnectCnt >= 5) {
 			alert('WebSocket服务器连接出错');
 			global.connectedFlag = false;
 			clearInterval(reconnectID);
@@ -214,15 +212,15 @@ function wsListener() {
 	ws.addEventListener('open', () => {
 		console.log('WebSocket连接已打开');
 
-		if(reconnectID != 0){
+		if (reconnectID != 0) {
 			clearInterval(reconnectID);
 			reconnectCnt = 0;
 			reconnectID = 0;
 		}
 
 		console.log(global);
-		if(!global.connectedFlag) {
-			if(global.roomHostFlag) {
+		if (!global.connectedFlag) {
+			if (global.roomHostFlag) {
 				sendNonDataMsg('create');
 			} else {
 				sendNonDataMsg('join');
@@ -308,17 +306,11 @@ function recvJson(data) {
 		lastMsg.innerHTML = object['msg'];
 
 		if (!global.roomHostFlag) {
-			//console.log(Math.abs(object['serverTime'] - object['currentTime'] - (serverCurrentDtime + new Date().getTime() - myPlayer.getCurrentTime() * 1000)));
 			let clientUrl = window.location.href.split('?')[0];
 			if (clientUrl[clientUrl.length - 1] == '/') {
 				clientUrl = clientUrl.substring(0, clientUrl.length - 1);
 			}
 			if (object['url'] && clientUrl != object['url']) {
-				//sessionStorage.setItem('myGlobalValue', JSON.stringify(global));
-				//initFlag = true;
-				// let newWindow = window.open(object['url']);
-				// newWindow.initFlag = true;
-				// newWindow.location.origin = clientUrl;
 				clearInterval(intervalID);
 
 				if (global.roomHostFlag) {
@@ -327,12 +319,7 @@ function recvJson(data) {
 					global.saveTime = -1;
 				}
 				GM_setValue('global', global);
-				//window.location.replace(object['url']);
 				window.open(object['url'], '_self');
-				//window.close();
-				// global = GM_getValue('global');
-				// console.log(global)
-				// changePanel(global.panelIndex);
 			}
 			if (!myPlayer.isUndefined() && !object['isEnded']) {
 				if (myPlayer.getPlaybackRate() != object['playbackRate']) {
@@ -390,18 +377,18 @@ function sendDataMsg() {
 	message['isRoomHost'] = global.roomHostFlag;
 	message['userName'] = global.userName;
 
+	let serverUrl = window.location.href.split('?')[0];
+	if (serverUrl[serverUrl.length - 1] == '/') {
+		serverUrl = serverUrl.substring(0, serverUrl.length - 1);
+	}
+	message['url'] = serverUrl;
+
 	if (global.roomHostFlag && !myPlayer.isUndefined()) {
 		message['serverTime'] = new Date().getTime() + serverCurrentDtime;
 		message['currentTime'] = Math.round(myPlayer.getCurrentTime() * 1000);
 		message['playbackRate'] = myPlayer.getPlaybackRate();
 		message['isPaused'] = myPlayer.isPaused();
 		message['isEnded'] = myPlayer.isEnded();
-
-		let serverUrl = window.location.href.split('?')[0];
-		if (serverUrl[serverUrl.length - 1] == '/') {
-			serverUrl = serverUrl.substring(0, serverUrl.length - 1);
-		}
-		message['url'] = serverUrl;
 	}
 
 	ws.send(JSON.stringify(message));
@@ -416,7 +403,7 @@ function sendDataMsg() {
 	} else {
 		hostNumber = global.hostNumber;
 	}
-	console.log(hostNumber, global.hostNumber);
+
 	if (global.hostNumber < hostNumber && global.roomHostFlag && new Date().getTime() - time < 5000) {
 		sendNonDataMsg('exit');
 		global.connectedFlag = false;
@@ -425,7 +412,6 @@ function sendDataMsg() {
 		changePanel(0);
 		clearInterval(intervalID);
 	} else {
-		console.log('1111111111');
 		global.saveTime = new Date().getTime();
 		GM_setValue('global', global);
 	}
@@ -442,10 +428,18 @@ function initPanel() {
 	panel.setAttribute('id', 'indexPanel');
 	document.body.appendChild(panel);
 
+	icon.innerHTML = '❤';
+	icon.style.position = 'absolute';
+	// icon.style.top = '8px';
+	icon.style.left = '8px';
+	icon.style['font-size'] = '24px';
+	icon.style.color = 'pink'
+
+	openBtn.appendChild(icon);
 	openBtn.setAttribute('id', 'openBtn');
-	openBtn.innerHTML = 'Open';
-	document.body.appendChild(openBtn);
 	openBtn.style.display = 'none';
+	openBtn.style.color = 'pink';
+	document.body.appendChild(openBtn);
 
 	GM_addStyle(`#indexPanel {
         position: fixed;
@@ -457,7 +451,7 @@ function initPanel() {
         border: 2px solid #ccc;
         border-radius: 16px 16px 16px 16px ;
         box-shadow: 5px 5px 15px rgba(0, 0, 0, 0.3);
-        z-index: 99999;
+        z-index: 1314520;
     }`);
 	GM_addStyle(`#openBtn {
         position: fixed;
@@ -469,8 +463,7 @@ function initPanel() {
         border: 2px solid #ccc;
         border-radius: 16px 16px 16px 16px ;
         box-shadow: 5px 5px 15px rgba(0, 0, 0, 0.3);
-        z-index: 99999;
-        background-image: url(img.src) no-repeat center center;
+        z-index: 1314520;
     }`);
 
 	var isDragging = false;
@@ -540,12 +533,6 @@ function initPanel() {
 			global.roomHostFlag = true;
 
 			connectServer(url, port);
-			console.log('test333');
-			// setTimeout(function () {
-			// 	console.log('test444');
-			// 	sendNonDataMsg('create');
-			// 	console.log('test555');
-			// }, 500);
 		} else {
 			alert('昵称不能为空!');
 		}
@@ -569,9 +556,6 @@ function initPanel() {
 			global.roomHostFlag = false;
 
 			connectServer(url, port);
-			// setTimeout(function () {
-			// 	sendNonDataMsg('join');
-			// }, 500);
 		} else {
 			alert('昵称或房间ID不能为空!');
 		}
@@ -621,7 +605,6 @@ function initPanel() {
 
 	title.innerHTML = '❤VideoWithYou';
 
-	// <span style="position: absolute; left: 100px; top: 50px; color: red; font-size: 24px;">您要显示的文本内容</span>
 	title.style.color = 'pink';
 	title.style['font-size'] = '20px';
 
@@ -630,14 +613,11 @@ function initPanel() {
 	title.style.top = '5px';
 	title.style.left = '5px';
 
-	// panel.insertBefore(title, panel.firstChild);
 	panel.appendChild(title);
 
 	roomInfo.style.position = 'absolute';
 	roomInfo.style.top = '40px';
 	roomInfo.style.left = '30px';
-	// roomInfo.style.width = '240px';
-	// roomInfo.style.height = '30px';
 	roomInfo.style.display = 'none';
 	roomInfo.style['font-size'] = '16px';
 	roomInfo.style.color = 'blue'
@@ -645,8 +625,6 @@ function initPanel() {
 	lastTime.style.position = 'absolute';
 	lastTime.style.top = '120px';
 	lastTime.style.left = '30px';
-	// lastTime.style.width = '240px';
-	// lastTime.style.height = '30px';
 	lastTime.style.display = 'none';
 	lastTime.style['font-size'] = '14px';
 	lastTime.style.color = 'green'
@@ -654,8 +632,6 @@ function initPanel() {
 	lastMsg.style.position = 'absolute';
 	lastMsg.style.top = '60px';
 	lastMsg.style.left = '30px';
-	// lastMsg.style.width = '240px';
-	// lastMsg.style.height = '30px';
 	lastMsg.style.display = 'none';
 	lastMsg.style['font-size'] = '16px';
 	lastMsg.style.color = 'purple'
@@ -663,8 +639,6 @@ function initPanel() {
 	roomId.style.position = 'absolute';
 	roomId.style.top = '100px';
 	roomId.style.left = '30px';
-	// roomId.style.width = '240px';
-	// roomId.style.height = '30px';
 	roomId.style['font-size'] = '14px';
 	roomId.style.display = 'none';
 
