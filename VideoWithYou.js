@@ -5,6 +5,8 @@
 // @description  Different places, same video. A script that controls the synchronous play of video websites.
 // @author       Moonkey_ & Iris
 // @match        https://www.bilibili.com/*
+// @match        https://*.youku.com/*
+// @match        https://youku.com/*
 // @icon         icon
 // @grant        GM_addStyle
 // @grant        GM_setValue
@@ -19,6 +21,104 @@ var reconnectCnt = 0;
 var intervalID = 0;
 var serverCurrentDtime = 0;
 var count = 0;
+
+class MyPlayer {
+	constructor() {
+		
+	}
+
+	getType() {
+		let href = window.location.href;
+		if (href.indexOf('bilibili') != -1) {
+			this.type = 'bilibili';
+		} else if (href.indexOf('youku') != -1) {
+			this.type = 'youku';
+		}
+	}
+
+	isUndefined() {
+		this.getType();
+		if (this.type == 'bilibili') {
+			return (typeof player == 'undefined');
+		} else if (this.type == 'youku') {
+			return (typeof videoPlayer == 'undefined');
+		} 
+	}
+
+	isPaused() {
+		this.getType();
+		if (this.type == 'bilibili') {
+			return player.isPaused();
+		} else if (this.type == 'youku') {
+			return (videoPlayer.getPlayerState().state == 'paused');
+		} 
+	}
+
+	isEnded() {
+		this.getType();
+		if (this.type == 'bilibili') {
+			return player.isEnded();
+		} else if (this.type == 'youku') {
+			return videoPlayer.isEnd;
+		} 
+	}
+
+	getCurrentTime() {
+		this.getType();
+		if (this.type == 'bilibili') {
+			return player.getCurrentTime();
+		} else if (this.type == 'youku') {
+			return videoPlayer.getCurrentTime();
+		} 
+	}
+
+	seek(time) {
+		this.getType();
+		if (this.type == 'bilibili') {
+			player.seek(time);
+		} else if (this.type == 'youku') {
+			videoPlayer.seek(time);
+		} 
+	}
+
+	play() {
+		this.getType();
+		if (this.type == 'bilibili') {
+			player.play();
+		} else if (this.type == 'youku') {
+			videoPlayer.play();
+		} 
+	}
+
+	pause() {
+		this.getType();
+		if (this.type == 'bilibili') {
+			player.pause();
+		} else if (this.type == 'youku') {
+			videoPlayer.pause();
+		} 
+	}
+
+	getPlaybackRate() {
+		this.getType();
+		if (this.type == 'bilibili') {
+			return player.getPlaybackRate();
+		} else if (this.type == 'youku') {
+			return 1;
+		} 
+	}
+
+	setPlaybackRate(rate) {
+		this.getType();
+		if (this.type == 'bilibili') {
+			player.setPlaybackRate(rate);
+		} else if (this.type == 'youku') {
+			//pass
+		} 
+	}
+}
+
+const myPlayer = new MyPlayer();
 
 var ws = {};
 var panel = document.createElement('div');
@@ -208,7 +308,7 @@ function recvJson(data) {
 		lastMsg.innerHTML = object['msg'];
 
 		if (!global.roomHostFlag) {
-			//console.log(Math.abs(object['serverTime'] - object['currentTime'] - (serverCurrentDtime + new Date().getTime() - player.getCurrentTime() * 1000)));
+			//console.log(Math.abs(object['serverTime'] - object['currentTime'] - (serverCurrentDtime + new Date().getTime() - myPlayer.getCurrentTime() * 1000)));
 			let clientUrl = window.location.href.split('?')[0];
 			if (clientUrl[clientUrl.length - 1] == '/') {
 				clientUrl = clientUrl.substring(0, clientUrl.length - 1);
@@ -234,22 +334,22 @@ function recvJson(data) {
 				// console.log(global)
 				// changePanel(global.panelIndex);
 			}
-			if (typeof player != 'undefined' && !object['isEnded']) {
-				if (player.getPlaybackRate() != object['playbackRate']) {
-					player.setPlaybackRate(object['playbackRate']);
+			if (!myPlayer.isUndefined() && !object['isEnded']) {
+				if (myPlayer.getPlaybackRate() != object['playbackRate']) {
+					myPlayer.setPlaybackRate(object['playbackRate']);
 				}
 
-				if (!object['isPaused'] && (Math.abs(object['serverTime'] - object['currentTime'] - (serverCurrentDtime + new Date().getTime() - player.getCurrentTime() * 1000)) >= 500)) {
-					player.seek((serverCurrentDtime + new Date().getTime() - object['serverTime'] + object['currentTime']) / 1000 + 0.5);
-					player.play();
+				if (!object['isPaused'] && (Math.abs(object['serverTime'] - object['currentTime'] - (serverCurrentDtime + new Date().getTime() - myPlayer.getCurrentTime() * 1000)) >= 500)) {
+					myPlayer.seek((serverCurrentDtime + new Date().getTime() - object['serverTime'] + object['currentTime']) / 1000 + 0.5);
+					myPlayer.play();
 				}
 
-				if (player.isPaused() != object['isPaused']) {
-					if (player.isPaused()) {
-						player.play();
+				if (myPlayer.isPaused() != object['isPaused']) {
+					if (myPlayer.isPaused()) {
+						myPlayer.play();
 					} else {
-						player.seek(object['currentTime'] / 1000);
-						player.pause();
+						myPlayer.seek(object['currentTime'] / 1000);
+						myPlayer.pause();
 					}
 				}
 			}
@@ -290,12 +390,12 @@ function sendDataMsg() {
 	message['isRoomHost'] = global.roomHostFlag;
 	message['userName'] = global.userName;
 
-	if (global.roomHostFlag && typeof player != 'undefined') {
+	if (global.roomHostFlag && !myPlayer.isUndefined()) {
 		message['serverTime'] = new Date().getTime() + serverCurrentDtime;
-		message['currentTime'] = Math.round(player.getCurrentTime() * 1000);
-		message['playbackRate'] = player.getPlaybackRate();
-		message['isPaused'] = player.isPaused();
-		message['isEnded'] = player.isEnded();
+		message['currentTime'] = Math.round(myPlayer.getCurrentTime() * 1000);
+		message['playbackRate'] = myPlayer.getPlaybackRate();
+		message['isPaused'] = myPlayer.isPaused();
+		message['isEnded'] = myPlayer.isEnded();
 
 		let serverUrl = window.location.href.split('?')[0];
 		if (serverUrl[serverUrl.length - 1] == '/') {
