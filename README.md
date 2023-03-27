@@ -33,7 +33,7 @@
 ###### 欢迎测试使用，感谢反馈bug与意见！联系邮箱Moonkey233@foxmail.com，在GitHub issue页面留言亦可。
 
 # 安装&依赖
-+ 本脚本是一款基于油猴插件(TamperMonkey)的浏览器脚本，使用JavaScript语言编写。**经测试，在Windows11 OS的Edge与Chrome浏览器中，以及MAC OS的Chrome浏览器中均能使用。**理论上Safari、Firefox等任何一款支持油猴插件的浏览器均能使用(但未经测试)。
++ 本脚本是一款基于油猴插件(TamperMonkey)的浏览器脚本，使用JavaScript语言编写。**经测试，在Windows11 OS的Edge与Chrome浏览器中，以及MAC OS的Chrome浏览器中均能使用**。理论上Safari、Firefox等任何一款支持油猴插件的浏览器均能使用(但未经测试)。
 
 1. 油猴是一款适用于多浏览器平台的开源脚本管理库，它提供了部分API供开发者使用。您首先需要去到油猴插件的官网(https://www.tampermonkey.net) 或者各大浏览器的插件安装商店界面**安装好油猴插件**(Chrome等部分浏览器可能需要使用科学上网工具)，并为其设置**允许访问本地文件URL权限**。
 
