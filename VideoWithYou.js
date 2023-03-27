@@ -22,7 +22,7 @@
 
 //const url = "127.0.0.1";
 const url = "Moonkey233.top";
-const port = 1206
+const port = 2333;
 
 var reconnectID = 0;
 var reconnectCnt = 0;
@@ -258,7 +258,7 @@ var global = {
 
 })();
 
-function connectServer(url = "127.0.0.1", port = 1206) {
+function connectServer(url = "127.0.0.1", port = 2333) {
 	console.log('test000');
 	ws = new WebSocket(`wss://${url}:${port}`, 'undefined', {
 		// 指定自定义的CA证书
