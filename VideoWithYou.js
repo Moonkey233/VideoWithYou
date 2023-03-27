@@ -7,6 +7,13 @@
 // @match        https://www.bilibili.com/*
 // @match        https://*.youku.com/*
 // @match        https://youku.com/*
+// @match        https://v.qq.com/*
+// @match        https://www.youtube.com/*
+// @match        https://pan.quark.cn/*
+// @match        https://www.aliyundrive.com/*
+// @match        https://www.iqiyi.com/*
+// @match        https://www.netflix.com/*
+// @match        https://www.disneyplus.com/*
 // @icon         icon
 // @grant        GM_addStyle
 // @grant        GM_setValue
@@ -16,6 +23,7 @@
 //const url = "127.0.0.1";
 const url = "Moonkey233.top";
 const port = 1206
+
 var reconnectID = 0;
 var reconnectCnt = 0;
 var intervalID = 0;
@@ -33,6 +41,20 @@ class MyPlayer {
 			this.type = 'bilibili';
 		} else if (href.indexOf('youku') != -1) {
 			this.type = 'youku';
+		} else if (href.indexOf('v.qq') != -1) {
+			this.type = 'tx';
+		} else if (href.indexOf('youtube') != -1) {
+			this.type = 'yt';
+		} else if (href.indexOf('quark') != -1) {
+			this.type = 'quark';
+		} else if (href.indexOf('aliyun') != -1) {
+			this.type = 'aliyun';
+		} else if (href.indexOf('iqiyi') != -1) {
+			this.type = 'iqy';
+		} else if (href.indexOf('netflix') != -1) {
+			this.type = 'netflix';
+		} else if (href.indexOf('disney') != -1) {
+			this.type = 'disney';
 		}
 	}
 
@@ -42,6 +64,10 @@ class MyPlayer {
 			return (typeof player == 'undefined');
 		} else if (this.type == 'youku') {
 			return (typeof videoPlayer == 'undefined');
+		} else if (this.type == 'tx') {
+			return (typeof document.getElementsByTagName('video')[0] == 'undefined');
+		} else if (this.type == 'yt' || this.type == 'quark' || this.type == 'aliyun' || this.tpye == 'iqy' || this.type == 'netflix' || this.type == 'disney') {
+			return (typeof document.getElementsByTagName('video')[0] == 'undefined');
 		}
 	}
 
@@ -51,6 +77,10 @@ class MyPlayer {
 			return player.isPaused();
 		} else if (this.type == 'youku') {
 			return (videoPlayer.getPlayerState().state == 'paused');
+		} else if (this.type == 'tx') {
+			return document.getElementsByTagName('video')[0].paused;
+		} else if (this.type == 'yt' || this.type == 'quark' || this.type == 'aliyun' || this.tpye == 'iqy' || this.type == 'netflix' || this.type == 'disney') {
+			return document.getElementsByTagName('video')[0].paused;
 		}
 	}
 
@@ -60,6 +90,10 @@ class MyPlayer {
 			return player.isEnded();
 		} else if (this.type == 'youku') {
 			return videoPlayer.isEnd;
+		} else if (this.type == 'tx') {
+			return document.getElementsByTagName('video')[0].ended;
+		} else if (this.type == 'yt' || this.type == 'quark' || this.type == 'aliyun' || this.tpye == 'iqy' || this.type == 'netflix' || this.type == 'disney') {
+			return document.getElementsByTagName('video')[0].ended;
 		}
 	}
 
@@ -69,6 +103,10 @@ class MyPlayer {
 			return player.getCurrentTime();
 		} else if (this.type == 'youku') {
 			return videoPlayer.getCurrentTime();
+		} else if (this.type == 'tx') {
+			return document.getElementsByTagName('video')[0].currentTime;
+		} else if (this.type == 'yt' || this.type == 'quark' || this.type == 'aliyun' || this.tpye == 'iqy' || this.type == 'netflix' || this.type == 'disney') {
+			return document.getElementsByTagName('video')[0].currentTime;
 		}
 	}
 
@@ -78,6 +116,10 @@ class MyPlayer {
 			player.seek(time);
 		} else if (this.type == 'youku') {
 			videoPlayer.seek(time);
+		} else if (this.type == 'tx') {
+			document.getElementsByTagName('video')[0].currentTime = time;
+		} else if (this.type == 'yt' || this.type == 'quark' || this.type == 'aliyun' || this.tpye == 'iqy' || this.type == 'netflix' || this.type == 'disney') {
+			document.getElementsByTagName('video')[0].currentTime = time;
 		}
 	}
 
@@ -87,6 +129,10 @@ class MyPlayer {
 			player.play();
 		} else if (this.type == 'youku') {
 			videoPlayer.play();
+		} else if (this.type == 'tx') {
+			document.getElementsByTagName('video')[0].play();
+		} else if (this.type == 'yt' || this.type == 'quark' || this.type == 'aliyun' || this.tpye == 'iqy' || this.type == 'netflix' || this.type == 'disney') {
+			document.getElementsByTagName('video')[0].play();
 		}
 	}
 
@@ -96,6 +142,10 @@ class MyPlayer {
 			player.pause();
 		} else if (this.type == 'youku') {
 			videoPlayer.pause();
+		} else if (this.type == 'tx') {
+			document.getElementsByTagName('video')[0].pause();
+		} else if (this.type == 'yt' || this.type == 'quark' || this.type == 'aliyun' || this.tpye == 'iqy' || this.type == 'netflix' || this.type == 'disney') {
+			document.getElementsByTagName('video')[0].pause();
 		}
 	}
 
@@ -104,7 +154,11 @@ class MyPlayer {
 		if (this.type == 'bilibili') {
 			return player.getPlaybackRate();
 		} else if (this.type == 'youku') {
-			return 1;
+			return videoPlayer.context.config.rate;
+		} else if (this.type == 'tx') {
+			return document.getElementsByClassName('txp_menuitem txp_current')[1].getAttribute('data-value');
+		} else if (this.type == 'yt' || this.type == 'quark' || this.type == 'aliyun' || this.tpye == 'iqy' || this.type == 'netflix' || this.type == 'disney') {
+			return document.getElementsByTagName('video')[0].playbackRate;
 		}
 	}
 
@@ -113,7 +167,26 @@ class MyPlayer {
 		if (this.type == 'bilibili') {
 			player.setPlaybackRate(rate);
 		} else if (this.type == 'youku') {
-			//pass
+			if (rate == 2) {
+				document.getElementsByClassName('kui-playrate-rate-item')[0].click();
+			} else if (rate == 1.5) {
+				document.getElementsByClassName('kui-playrate-rate-item')[1].click();
+			} else if (rate == 1.25) {
+				document.getElementsByClassName('kui-playrate-rate-item')[2].click();
+			} else if (rate == 0.5) {
+				document.getElementsByClassName('kui-playrate-rate-item')[4].click();
+			} else {
+				document.getElementsByClassName('kui-playrate-rate-item')[3].click();
+			}
+		} else if (this.type == 'tx') {
+			let length = document.getElementsByClassName('txp_menuitem').length;
+			for (let i = 0; i < length; i++) {
+				if (document.getElementsByClassName('txp_menuitem')[i].getAttribute("data-value") == rate) {
+					document.getElementsByClassName('txp_menuitem')[i].click();
+				}
+			}
+		} else if (this.type == 'yt' || this.type == 'quark' || this.type == 'aliyun' || this.tpye == 'iqy' || this.type == 'disney') {
+			document.getElementsByTagName('video')[0].playbackRate = rate;
 		}
 	}
 }
