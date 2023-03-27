@@ -10,8 +10,8 @@
 + 夸克云盘(pan.quark.cn)
 + 阿里云盘(www.aliyundrive.com)
 + 爱奇艺(www.iqiyi.com)
-+ NetFlix(www.netflix.com)
-+ Disney+(www.disneyplus.com)
++ NetFlix(www.netflix.com) (未经测试)
++ Disney+(www.disneyplus.com) (未经测试)
 
 ### 正在研究:
 + 百度云盘(pan.baidu.com)
