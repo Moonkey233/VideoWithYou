@@ -1,12 +1,10 @@
 const fs = require('fs');
 const WebSocket = require('ws');
 const https = require('https');
-const port = 2333;
-const ca = `-----BEGIN CERTIFICATE-----\nMIIDazCCAlOgAwIBAgIUTASMYRLAkZ4LmtRwxETkME5IxhUwDQYJKoZIhvcNAQELBQAwRTELMAkGA1UEBhMCQVUxEzARBgNVBAgMClNvbWUtU3RhdGUxITAfBgNVBAoMGEludGVybmV0IFdpZGdpdHMgUHR5IEx0ZDAeFw0yMzAzMjYwMTQwMTRaFw0zMzAzMjMwMTQwMTRaMEUxCzAJBgNVBAYTAkFVMRMwEQYDVQQIDApTb21lLVN0YXRlMSEwHwYDVQQKDBhJbnRlcm5ldCBXaWRnaXRzIFB0eSBMdGQwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDXVETZNw1lHoHDTOGFsEEiANFSxZRPfvQUsk1ZmLdu5vb1wdkgR0/7r5J3Bu2Q5ilzZVWgkv7Esge2P5o9SVLjFf+zZp+g/GNukHRDih7qiKqJ/NP/9pcsmyJ4O6zr6Q4mlK2FUR+lRCOTsZvA5ZvO1y+ggrGNVfDgqSrDE13ND9XloCVNO0v7R3SFiWW3iUYa1LVaBxkfnhedpMRX+kovs0ASsaL7agRWIAyVo5tNHDBu8UxG+M2/WwseO8Aa0YbfL8ixfZ69uN7/nWF283jUMHFc39ZXUane3nm88pUHWO/P1grqrlD/8MZeduHcQ9gAJJ/iCFi7Xalm3jHWY6z7AgMBAAGjUzBRMB0GA1UdDgQWBBT5t5c19GpAtSdLKylSCX+Hmq3wcTAfBgNVHSMEGDAWgBT5t5c19GpAtSdLKylSCX+Hmq3wcTAPBgNVHRMBAf8EBTADAQH/MA0GCSqGSIb3DQEBCwUAA4IBAQBtNbwpKoem3px4r23WDvAC0cBH46JMR4+liwC9zrULW4pVmdXR2NHHmhpCxgHcZb83NTJPE03YsOIAC3qesoErwQMc1lNM3wRWATzEPasJYdaYJz9nEwN4kBIUeLDjw03IeLNTNv/x4F6rkM/hKRKqpJWPYBbEXZyTEgXmBlpd6LT0EC6eV2PCwhR0RC7iuIo+m3q+rSceQlTJxyUpYab2ULFmKqHyAtgS/UIJT77Fdj5admDf+OypFpVBaqTJOxKU6xzpwQLeBU9rVatgIZHKP4Iscr93QkrMqMvM8NW1r0TSvfcJnzdUH38DQ7RtYvoOpGOZ0LdtXpWJIudJQcte\n-----END CERTIFICATE-----`;
+const port = 1206
 const options = {
-	key: fs.readFileSync('server.key'),
-	cert: fs.readFileSync('server.crt'),
-	ca: ca,
+	key: fs.readFileSync('cert/plutocharon.love.key'),
+	cert: fs.readFileSync('cert/plutocharon.love.crt'),
 	rejectUnauthorized: false
 };
 const server = https.createServer(options);
@@ -75,44 +73,51 @@ wss.on('connection', function connection(ws) {
 
 		} else if (object['type'] == 'data') {
 
-			if (object['isRoomHost'] == true) {
-				socketPool[object['uuid']]['currentTime'] = object['currentTime'];
-				socketPool[object['uuid']]['playbackRate'] = object['playbackRate'];
-				socketPool[object['uuid']]['isPaused'] = object['isPaused'];
-				socketPool[object['uuid']]['isEnded'] = object['isEnded'];
-				socketPool[object['uuid']]['url'] = object['url'];
-				socketPool[object['uuid']]['serverTime'] = object['serverTime'];
-			}
-
-			let msg = {};
-
-			if (socketPool[object['uuid']] == undefined) {
-				msg['type'] = 'error';
-				msg['msg'] = '房主已断开连接';
+			try {
+				if (object['isRoomHost'] == true) {
+					socketPool[object['uuid']]['currentTime'] = object['currentTime'];
+					socketPool[object['uuid']]['playbackRate'] = object['playbackRate'];
+					socketPool[object['uuid']]['isPaused'] = object['isPaused'];
+					socketPool[object['uuid']]['isEnded'] = object['isEnded'];
+					socketPool[object['uuid']]['url'] = object['url'];
+					socketPool[object['uuid']]['serverTime'] = object['serverTime'];
+				}
+				let msg = {};
+	
+				if (socketPool[object['uuid']] == undefined) {
+					msg['type'] = 'error';
+					msg['msg'] = '房主已断开连接';
+					ws.send(JSON.stringify(msg));
+					msg = { type: 'exit' };
+				} else {
+					if (!object['isRoomHost']) {
+						socketPool[object['uuid']]['member'][object['userName']] = new Date().getTime();
+					}
+	
+					msg['type'] = 'data';
+					msg['timeStamp'] = new Date().getTime();
+					msg['count'] = socketPool[object['uuid']]['count'];
+					msg['msg'] = socketPool[object['uuid']]['msg'];
+	
+					if (!object['isRoomHost']) {
+						msg['currentTime'] = socketPool[object['uuid']]['currentTime'];
+						msg['currentTime'] = socketPool[object['uuid']]['currentTime'];
+						msg['playbackRate'] = socketPool[object['uuid']]['playbackRate'];
+						msg['isPaused'] = socketPool[object['uuid']]['isPaused'];
+						msg['isEnded'] = socketPool[object['uuid']]['isEnded'];
+						msg['url'] = socketPool[object['uuid']]['url'];
+						msg['serverTime'] = socketPool[object['uuid']]['serverTime'];
+					}
+				}
 				ws.send(JSON.stringify(msg));
-				msg = { type: 'exit' };
-			} else {
-				if (!object['isRoomHost']) {
-					socketPool[object['uuid']]['member'][object['userName']] = new Date().getTime();
-				}
-
-				msg['type'] = 'data';
-				msg['timeStamp'] = new Date().getTime();
-				msg['count'] = socketPool[object['uuid']]['count'];
-				msg['msg'] = socketPool[object['uuid']]['msg'];
-
-				if (!object['isRoomHost']) {
-					msg['currentTime'] = socketPool[object['uuid']]['currentTime'];
-					msg['currentTime'] = socketPool[object['uuid']]['currentTime'];
-					msg['playbackRate'] = socketPool[object['uuid']]['playbackRate'];
-					msg['isPaused'] = socketPool[object['uuid']]['isPaused'];
-					msg['isEnded'] = socketPool[object['uuid']]['isEnded'];
-					msg['url'] = socketPool[object['uuid']]['url'];
-					msg['serverTime'] = socketPool[object['uuid']]['serverTime'];
-				}
+			} catch {
+				let msg = {};
+				msg['type'] = 'exit';
+				ws.send(JSON.stringify(msg));
+				setTimeout(function () {
+					ws.close();
+				}, 200);
 			}
-
-			ws.send(JSON.stringify(msg));
 		}
 
 	});
@@ -128,7 +133,7 @@ function sendError(ws, err = 'ERROR') {
 
 function removeRoom() {
 	for (i in socketPool) {
-		if (new Date().getTime() - socketPool[i]['serverTime'] >= 5000) {
+		if (new Date().getTime() - socketPool[i]['serverTime'] > 12000) {
 			delete socketPool[i];
 			console.log(`remove ${i}`);
 		}
@@ -143,7 +148,7 @@ function getRealCnt() {
 				continue;
 			} else {
 				for (k in socketPool[i][j]) {
-					if (new Date().getTime() - socketPool[i][j][k] >= 5000) {
+					if (new Date().getTime() - socketPool[i][j][k] > 12000) {
 						socketPool[i]['msg'] = k + ' 断开了连接';
 						delete socketPool[i][j][k];
 					} else {
