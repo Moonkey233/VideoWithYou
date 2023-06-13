@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VideoWithYou
 // @namespace    https://github.com/Moonkey233/VideoWithYou
-// @version      1.0.0
+// @version      1.1.0
 // @description  Different places, same video. A script that controls the synchronous play of video websites.
 // @author       Moonkey_ & Iris
 // @match        https://www.bilibili.com/*
@@ -20,15 +20,8 @@
 // @grant        GM_getValue
 // ==/UserScript==
 
-//const url = "127.0.0.1";
-const url = "Moonkey233.top";
-const port = 2333;
-
-var reconnectID = 0;
-var reconnectCnt = 0;
-var intervalID = 0;
-var serverCurrentDtime = 0;
-var count = 0;
+const url = "PlutoCharon.LOVE";
+const port = 1206
 
 class MyPlayer {
 	constructor() {
@@ -192,7 +185,13 @@ class MyPlayer {
 }
 
 const myPlayer = new MyPlayer();
-
+var reconnectID = 0;
+var reconnectCnt = 0;
+var intervalID = 0;
+var serverCurrentDtime = 0;
+var count = 0;
+var isExit = false;
+var sendNoRecv = 0;
 var ws = {};
 var panel = document.createElement('div');
 var openBtn = document.createElement('div');
@@ -211,9 +210,16 @@ var lastTime = document.createElement('span');
 var lastMsg = document.createElement('span');
 var icon = document.createElement('span');
 
+var matchSelect = document.createElement('select');
+var fullMatchOption = document.createElement('option');
+var halfMatchOption = document.createElement('option');
+var noMatchOption = document.createElement('option');
+var offsetInput = document.createElement('input');
+
 var global = {
 	roomHostFlag: true,
 	connectedFlag: false,
+	matchType: 'half',
 	sessionUuid: '',
 	userName: '',
 	roomName: '',
@@ -229,6 +235,7 @@ var global = {
 		global = {
 			roomHostFlag: true,
 			connectedFlag: false,
+			matchType: 'half',
 			sessionUuid: '',
 			userName: '',
 			roomName: '',
@@ -243,6 +250,8 @@ var global = {
 		global.sessionUuid = generateUuid();
 		global.hostNumber++;
 		global.connectedFlag = false;
+        panel.style.display = 'none';
+		openBtn.style.display = 'block';
 	} else {
 		console.log('old');
 		initPanel();
@@ -254,70 +263,89 @@ var global = {
 		intervalID = setInterval(sendDataMsg, 500);
 		panel.style.display = 'none';
 		openBtn.style.display = 'block'
+		if (global.matchType == 'no') {
+			noMatchOption.selected = true;
+		} else if (global.matchType == 'full') {
+			fullMatchOption.selected = true;
+		} else {
+			halfMatchOption.selected = true;
+		}
 	}
 
 })();
 
-function connectServer(url = "127.0.0.1", port = 2333) {
-	console.log('test000');
-	ws = new WebSocket(`wss://${url}:${port}`, 'undefined', {
-		// 指定自定义的CA证书
-		ca: `-----BEGIN CERTIFICATE-----\nMIIDazCCAlOgAwIBAgIUTASMYRLAkZ4LmtRwxETkME5IxhUwDQYJKoZIhvcNAQELBQAwRTELMAkGA1UEBhMCQVUxEzARBgNVBAgMClNvbWUtU3RhdGUxITAfBgNVBAoMGEludGVybmV0IFdpZGdpdHMgUHR5IEx0ZDAeFw0yMzAzMjYwMTQwMTRaFw0zMzAzMjMwMTQwMTRaMEUxCzAJBgNVBAYTAkFVMRMwEQYDVQQIDApTb21lLVN0YXRlMSEwHwYDVQQKDBhJbnRlcm5ldCBXaWRnaXRzIFB0eSBMdGQwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDXVETZNw1lHoHDTOGFsEEiANFSxZRPfvQUsk1ZmLdu5vb1wdkgR0/7r5J3Bu2Q5ilzZVWgkv7Esge2P5o9SVLjFf+zZp+g/GNukHRDih7qiKqJ/NP/9pcsmyJ4O6zr6Q4mlK2FUR+lRCOTsZvA5ZvO1y+ggrGNVfDgqSrDE13ND9XloCVNO0v7R3SFiWW3iUYa1LVaBxkfnhedpMRX+kovs0ASsaL7agRWIAyVo5tNHDBu8UxG+M2/WwseO8Aa0YbfL8ixfZ69uN7/nWF283jUMHFc39ZXUane3nm88pUHWO/P1grqrlD/8MZeduHcQ9gAJJ/iCFi7Xalm3jHWY6z7AgMBAAGjUzBRMB0GA1UdDgQWBBT5t5c19GpAtSdLKylSCX+Hmq3wcTAfBgNVHSMEGDAWgBT5t5c19GpAtSdLKylSCX+Hmq3wcTAPBgNVHRMBAf8EBTADAQH/MA0GCSqGSIb3DQEBCwUAA4IBAQBtNbwpKoem3px4r23WDvAC0cBH46JMR4+liwC9zrULW4pVmdXR2NHHmhpCxgHcZb83NTJPE03YsOIAC3qesoErwQMc1lNM3wRWATzEPasJYdaYJz9nEwN4kBIUeLDjw03IeLNTNv/x4F6rkM/hKRKqpJWPYBbEXZyTEgXmBlpd6LT0EC6eV2PCwhR0RC7iuIo+m3q+rSceQlTJxyUpYab2ULFmKqHyAtgS/UIJT77Fdj5admDf+OypFpVBaqTJOxKU6xzpwQLeBU9rVatgIZHKP4Iscr93QkrMqMvM8NW1r0TSvfcJnzdUH38DQ7RtYvoOpGOZ0LdtXpWJIudJQcte\n-----END CERTIFICATE-----`,
-		rejectUnauthorized: false,
-	});
-	console.log('test111');
-	if (reconnectID == 0) {
-		wsListener();
-	} else {
-		if (++reconnectCnt >= 5) {
-			alert('WebSocket服务器连接出错');
-			global.connectedFlag = false;
-			clearInterval(reconnectID);
+function connectServer(url = "127.0.0.1", port = 1206) {
+    ws = new WebSocket(`wss://${url}:${port}`, 'undefined', {
+        rejectUnauthorized: false,
+    });
+	wsListener();
+    if (reconnectID != 0) {
+		console.log("重连中... cnt: ", reconnectCnt);
+        if (++reconnectCnt > 10) {
+            alert('WebSocket服务器连接出错');
+            global.connectedFlag = false;
+			global.roomHostFlag = false;
+			global.sessionUuid = '';
+			changePanel(0);
+			clearInterval(intervalID);
+			isExit = true;
 			reconnectCnt = 0;
-			reconnectID = 0;
-		};
-	}
-	console.log('test222');
+			ws.close();
+        };
+    }
 }
 
 function wsListener() {
-	// 监听WebSocket连接打开事件
-	ws.addEventListener('open', () => {
-		console.log('WebSocket连接已打开');
+    // 监听WebSocket连接打开事件
+    ws.addEventListener('open', () => {
+        console.log('WebSocket连接已打开');
 
-		if (reconnectID != 0) {
+        if (reconnectID != 0) {
+            clearInterval(reconnectID);
+            reconnectCnt = 0;
+            reconnectID = 0;
+        }
+
+        console.log(global);
+        if (!global.connectedFlag) {
+            if (global.roomHostFlag) {
+                sendNonDataMsg('create');
+            } else {
+                sendNonDataMsg('join');
+            }
+        }
+    });
+
+    // 监听WebSocket接收到消息事件
+    ws.addEventListener('message', event => {
+        recvJson(event.data);
+        // console.log('WebSocket收到消息:', event.data);
+    });
+
+    // 监听WebSocket关闭事件
+    ws.addEventListener('close', event => {
+        console.log('WebSocket连接已关闭:', event.code, event.reason);
+		if (!isExit) {
 			clearInterval(reconnectID);
-			reconnectCnt = 0;
-			reconnectID = 0;
+        	reconnectID = setInterval(() => connectServer(url, port), 1000);
+		} else {
+			global.connectedFlag = false;
+			global.roomHostFlag = false;
+			global.sessionUuid = '';
+			changePanel(0);
+			clearInterval(intervalID);
+			clearInterval(reconnectID);
+			isExit = true;
 		}
+    });
 
-		console.log(global);
-		if (!global.connectedFlag) {
-			if (global.roomHostFlag) {
-				sendNonDataMsg('create');
-			} else {
-				sendNonDataMsg('join');
-			}
-		}
-	});
-
-	// 监听WebSocket接收到消息事件
-	ws.addEventListener('message', event => {
-		recvJson(event.data);
-		// console.log('WebSocket收到消息:', event.data);
-	});
-
-	// 监听WebSocket关闭事件
-	ws.addEventListener('close', event => {
-		console.log('WebSocket连接已关闭:', event.code, event.reason);
-	});
-
-	// 监听WebSocket出错事件
-	ws.addEventListener('error', error => {
-		reconnectID = setInterval(connectServer(url, port), 1000);
-		console.log('WebSocket出错:', error);
-		// alert('WebSocket出错:', error);
-	});
+    // 监听WebSocket出错事件
+    ws.addEventListener('error', error => {
+        clearInterval(reconnectID);
+        reconnectID = setInterval(() => connectServer(url, port), 1000);
+        console.log('WebSocket出错:', error);
+        // alert('WebSocket出错:', error);
+    });
 }
 
 function changePanel(index = 0) {
@@ -332,9 +360,22 @@ function changePanel(index = 0) {
 		copyButton.style.display = 'none';
 		lastTime.style.display = 'none';
 		lastMsg.style.display = 'none';
+		matchSelect.style.display = 'block';
+		offsetInput.style.display = 'none';
 	} else {
 		roomId.textContent = `房间ID: ${global.sessionUuid}`;
 		roomInfo.textContent = `${global.roomName} 的房间, 人数👥: ${count}`;
+
+		var infoSize = 18;
+		if (global.roomName.length > 4) {
+			infoSize = 14;
+		} else if (global.roomName.length > 8){
+			infoSize = 10;
+		} else if (global.roomName.length > 12) {
+			infoSize = 6;
+		}
+		roomInfo.style['font-size'] = String(infoSize) + 'px';
+
 		joinButton.style.display = 'none';
 		createButton.style.display = 'none';
 		nameInput.style.display = 'none';
@@ -345,10 +386,13 @@ function changePanel(index = 0) {
 		copyButton.style.display = 'block';
 		lastTime.style.display = 'block';
 		lastMsg.style.display = 'block';
+		matchSelect.style.display = 'block';
+		offsetInput.style.display = 'block';
 	}
 }
 
 function recvJson(data) {
+	sendNoRecv = 0;
 	let object = JSON.parse(data);
 	console.log(object);
 
@@ -360,7 +404,7 @@ function recvJson(data) {
 		global.roomName = object['userName'];
 		count = object['count'];
 		serverCurrentDtime = object['timeStamp'] - new Date().getTime();
-
+		isExit = false;
 		changePanel(1);
 		intervalID = setInterval(sendDataMsg, 500);
 
@@ -368,22 +412,56 @@ function recvJson(data) {
 		alert(object['msg']);
 
 	} else if (object['type'] == 'exit') {
+		global.connectedFlag = false;
+		global.roomHostFlag = false;
+		global.sessionUuid = '';
 		changePanel(0);
 		clearInterval(intervalID);
+		clearInterval(reconnectID);
+		isExit = true;
 		ws.close();
 	} else if (object['type'] == 'data') {
 		serverCurrentDtime = object['timeStamp'] - new Date().getTime();
 		lastTime.innerHTML = '最新同步时间: ' + new Date(object['timeStamp']).toLocaleString();
 		count = object['count'];
 
+		var msgSize = 18;
+		if (String(object['msg']).length > 4) {
+			msgSize = 14;
+		} else if (String(object['msg']).length > 8){
+			msgSize = 10;
+		} else if (String(object['msg']).length > 12) {
+			msgSize = 6;
+		}
+		lastMsg.style['font-size'] = String(msgSize) + 'px';
 		lastMsg.innerHTML = object['msg'];
 
+		var clientUrl = "";
+		var serverUrl = "";
 		if (!global.roomHostFlag) {
-			let clientUrl = window.location.href.split('?')[0];
-			if (clientUrl[clientUrl.length - 1] == '/') {
-				clientUrl = clientUrl.substring(0, clientUrl.length - 1);
+			var selectedMatch = matchSelect.value;
+			console.log(selectedMatch)
+			if (selectedMatch == 'halfMatch') {
+				clientUrl = window.location.href.split('?')[0];
+				if (clientUrl[clientUrl.length - 1] == '/') {
+					clientUrl = clientUrl.substring(0, clientUrl.length - 1);
+				}
+				if (object['url']) {
+					serverUrl = object['url'].split('?')[0];
+					if (serverUrl[serverUrl.length - 1] == '/') {
+						serverUrl = serverUrl.substring(0, serverUrl.length - 1);
+					}
+				}
+				global.matchType = 'half';
+			} else if (selectedMatch == 'fullMatch') {
+				clientUrl = window.location.href;
+				serverUrl = object['url'];
+				global.matchType = 'full';
+			} else {
+				global.matchType = 'no';
 			}
-			if (object['url'] && clientUrl != object['url']) {
+			console.log(serverUrl, clientUrl);
+			if (selectedMatch != 'noMatch' && object['url'] && clientUrl != serverUrl) {
 				clearInterval(intervalID);
 
 				if (global.roomHostFlag) {
@@ -399,8 +477,12 @@ function recvJson(data) {
 					myPlayer.setPlaybackRate(object['playbackRate']);
 				}
 
-				if (!object['isPaused'] && (Math.abs(object['serverTime'] - object['currentTime'] - (serverCurrentDtime + new Date().getTime() - myPlayer.getCurrentTime() * 1000)) >= 500)) {
-					myPlayer.seek((serverCurrentDtime + new Date().getTime() - object['serverTime'] + object['currentTime']) / 1000 + 0.5);
+				var offset = 0;
+				if (offsetInput.value != '' && parseInt(offsetInput.value) != NaN) {
+					offset = parseInt(offsetInput.value);
+				}
+				if (!object['isPaused'] && (Math.abs(object['serverTime'] - object['currentTime'] - (serverCurrentDtime + new Date().getTime() - myPlayer.getCurrentTime() * 1000 + offset * 1000)) >= 1000)) {
+					myPlayer.seek((serverCurrentDtime + new Date().getTime() - object['serverTime'] + object['currentTime']) / 1000 + 0.5 + offset);
 					myPlayer.play();
 				}
 
@@ -408,7 +490,11 @@ function recvJson(data) {
 					if (myPlayer.isPaused()) {
 						myPlayer.play();
 					} else {
-						myPlayer.seek(object['currentTime'] / 1000);
+						var offset = 0;
+						if (offsetInput.value != '' && parseInt(offsetInput.value) != NaN) {
+							offset = parseInt(offsetInput.value);
+						}
+						myPlayer.seek(object['currentTime'] / 1000 + offset);
 						myPlayer.pause();
 					}
 				}
@@ -434,6 +520,10 @@ function generateUuid() {
 }
 
 function sendNonDataMsg(type) {
+	if(++sendNoRecv == 3) {
+		clearInterval(reconnectID);
+		reconnectID = setInterval(() => connectServer(url, port), 1000);
+	}
 	let message = {};
 	message['type'] = type;
 	message['userName'] = global.userName;
@@ -444,17 +534,23 @@ function sendNonDataMsg(type) {
 }
 
 function sendDataMsg() {
+	if(++sendNoRecv == 3) {
+		clearInterval(reconnectID);
+		reconnectID = setInterval(() => connectServer(url, port), 1000);
+	}
 	let message = {};
 	message['type'] = 'data';
 	message['uuid'] = getUuid();
 	message['isRoomHost'] = global.roomHostFlag;
 	message['userName'] = global.userName;
 
-	let serverUrl = window.location.href.split('?')[0];
-	if (serverUrl[serverUrl.length - 1] == '/') {
-		serverUrl = serverUrl.substring(0, serverUrl.length - 1);
-	}
-	message['url'] = serverUrl;
+	// let serverUrl = window.location.href.split('?')[0];
+	// if (serverUrl[serverUrl.length - 1] == '/') {
+	// 	serverUrl = serverUrl.substring(0, serverUrl.length - 1);
+	// }
+	// message['url'] = serverUrl;
+
+	message['url'] = window.location.href;
 
 	if (global.roomHostFlag && !myPlayer.isUndefined()) {
 		message['serverTime'] = new Date().getTime() + serverCurrentDtime;
@@ -516,7 +612,7 @@ function initPanel() {
 
 	GM_addStyle(`#indexPanel {
         position: fixed;
-        bottom: 20px;
+        bottom: 40px;
         right: 20px;
         width: 300px;
         height: 200px;
@@ -528,7 +624,7 @@ function initPanel() {
     }`);
 	GM_addStyle(`#openBtn {
         position: fixed;
-        bottom: 20px;
+        bottom: 200px;
         right: 20px;
         width: 40px;
         height: 40px;
@@ -574,7 +670,9 @@ function initPanel() {
 
 	minimizeButton.addEventListener('click', function (e) {
 		panel.style.display = 'none';
-		openBtn.style.display = 'block'
+		openBtn.style.left = parseInt(panel.style.left) + 260 + 'px';
+		openBtn.style.top = panel.style.top;
+		openBtn.style.display = 'block';
 	});
 
 	panel.appendChild(minimizeButton);
@@ -604,7 +702,7 @@ function initPanel() {
 		if (nameValue != '') {
 			global.userName = nameValue;
 			global.roomHostFlag = true;
-
+			reconnectCnt = 0;
 			connectServer(url, port);
 		} else {
 			alert('昵称不能为空!');
@@ -627,7 +725,7 @@ function initPanel() {
 			global.userName = nameValue;
 			global.sessionUuid = uuidValue;
 			global.roomHostFlag = false;
-
+			reconnectCnt = 0;
 			connectServer(url, port);
 		} else {
 			alert('昵称或房间ID不能为空!');
@@ -652,6 +750,9 @@ function initPanel() {
 		global.sessionUuid = '';
 		changePanel(0);
 		clearInterval(intervalID);
+		clearInterval(reconnectID);
+		isExit = true;
+		ws.close();
 	});
 
 	panel.appendChild(exitButton);
@@ -690,29 +791,29 @@ function initPanel() {
 
 	roomInfo.style.position = 'absolute';
 	roomInfo.style.top = '40px';
-	roomInfo.style.left = '30px';
+	roomInfo.style.left = '10px';
 	roomInfo.style.display = 'none';
-	roomInfo.style['font-size'] = '16px';
+	roomInfo.style['font-size'] = '12px';
 	roomInfo.style.color = 'blue'
 
 	lastTime.style.position = 'absolute';
 	lastTime.style.top = '120px';
-	lastTime.style.left = '30px';
+	lastTime.style.left = '10px';
 	lastTime.style.display = 'none';
-	lastTime.style['font-size'] = '14px';
+	lastTime.style['font-size'] = '8px';
 	lastTime.style.color = 'green'
 
 	lastMsg.style.position = 'absolute';
 	lastMsg.style.top = '60px';
-	lastMsg.style.left = '30px';
+	lastMsg.style.left = '10px';
 	lastMsg.style.display = 'none';
-	lastMsg.style['font-size'] = '16px';
+	lastMsg.style['font-size'] = '12px';
 	lastMsg.style.color = 'purple'
 
 	roomId.style.position = 'absolute';
 	roomId.style.top = '100px';
-	roomId.style.left = '30px';
-	roomId.style['font-size'] = '14px';
+	roomId.style.left = '10px';
+	roomId.style['font-size'] = '8px';
 	roomId.style.display = 'none';
 
 	panel.appendChild(roomInfo);
@@ -738,4 +839,36 @@ function initPanel() {
 	});
 
 	panel.appendChild(copyButton);
+
+	matchSelect.style.position = 'absolute';
+	matchSelect.style.top = '150px';
+	matchSelect.style.left = '105px';
+	matchSelect.style.width = '90px';
+	matchSelect.style.height = '30px';
+	matchSelect.style.display = 'block';
+	matchSelect.style.fontSize = '8px';
+	panel.appendChild(matchSelect);
+
+	fullMatchOption.value = 'fullMatch';
+	fullMatchOption.text = 'URL全匹配';
+	matchSelect.appendChild(fullMatchOption);
+	halfMatchOption.value = 'halfMatch';
+	halfMatchOption.text = 'URL半匹配';
+	halfMatchOption.selected = true;
+	matchSelect.appendChild(halfMatchOption);
+	noMatchOption.value = 'noMatch';
+	noMatchOption.text = 'URL不匹配';
+	matchSelect.appendChild(noMatchOption);
+
+	offsetInput.type = 'text';
+	offsetInput.placeholder = '时间偏移(s)';
+	offsetInput.style['font-size'] = '8px';
+	offsetInput.style.position = 'absolute';
+	offsetInput.style.top = '100px';
+	offsetInput.style.left = '220px';
+	offsetInput.style.width = '70px';
+	offsetInput.style.height = '40px';
+	offsetInput.style.display = 'none';
+
+	panel.appendChild(offsetInput);
 }
