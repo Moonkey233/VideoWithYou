@@ -1,7 +1,7 @@
 const fs = require('fs');
 const WebSocket = require('ws');
 const https = require('https');
-const port = 1206
+const port = 2333
 const options = {
 	key: fs.readFileSync('cert/plutocharon.love.key'),
 	cert: fs.readFileSync('cert/plutocharon.love.crt'),
