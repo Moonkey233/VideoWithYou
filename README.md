@@ -1,14 +1,24 @@
 # VideoWithYou
 **Different places, same video. A script that controls the synchronous playback of video websites.**
 
+## @20230613最新更新内容:
++ 修复了需要安全认证的bug, 再也不用进行安全认证
++ 更换了新域名PlutoCharon.LOVE
++ 修复了自动重连未生效的bug
++ 添加了URL匹配方式(客户端)
++ 适应B站收藏夹视频(全匹配)
++ 适应夸克阿里个人云盘视频(不匹配)
++ 添加了时间偏移功能, 客户端可向前/向后自定义偏移, 以适应优酷等网站同集视频插入广告导致的时间不同步
++ 优化字体显示大小, 能根据名字长度动态调整字体大小
+
 一款适用于异地双人/多端多人共同观看视频，并自动同步视频链接/暂停状态/播放进度/播放倍速的脚本。
 ### 现已支持:
 + Bilibili(www.bilibili.com)
 + 优酷视频(*.youku.com)
 + 腾讯视频(v.qq.com)
 + 爱奇艺(www.iqiyi.com)
-+ 夸克云盘(pan.quark.cn)
-+ 阿里云盘(www.aliyundrive.com) (阿里云跳转问题, 成员需要手动打开视频界面再加入房间)
++ 夸克云盘(pan.quark.cn) (开启不匹配即可)
++ 阿里云盘(www.aliyundrive.com) (阿里云跳转问题, 成员需要手动打开视频界面再加入房间) (开启不匹配即可)
 + YouTube(www.youtube.com)
 + NetFlix(www.netflix.com) (未经测试)
 + Disney+(www.disneyplus.com) (未经测试)
@@ -39,7 +49,7 @@
 
 2. 其次，**将VideoWithYou.js导入或复制进油猴插件并保存启用**。
 
-3. 如果您使用开发者的服务器与域名通信，**您需要在浏览器中输入一次"https://Moonkey233.top:2333"**, 这将触发浏览器的不安全提示(这是由于服务端脚本的tls加密使用的CA证书与密钥均为OPENSSL自签名的，未得到CA机构的官方认可)，**需要手动点击一次确认继续访问**(可能需要打开更多/高级设置之类的才能看到信任网站或继续访问类似字样，且点击后不会有后续反应)。
+3. (此条已无需进行)如果您使用开发者的服务器与域名通信，**您需要在浏览器中输入一次"https://Moonkey233.top:2333"**, 这将触发浏览器的不安全提示(这是由于服务端脚本的tls加密使用的CA证书与密钥均为OPENSSL自签名的，未得到CA机构的官方认可)，**需要手动点击一次确认继续访问**(可能需要打开更多/高级设置之类的才能看到信任网站或继续访问类似字样，且点击后不会有后续反应)。
 
 4. 如果您使用自己的服务器与端口，您需要在VideoWithMe.js顶部**修改const变量url和port的值**为您的服务器域名/ip与端口，server.js中的监听端口也需要修改，并将server.js部署到您的云服务器，使用nodejs环境运行(node server.js)，**服务端需要安装nodejs并配置websocket依赖环境**，使得server.js能够正确引用导入ws模块(npm i ws)。且您需要**开放云服务器对应端口入方向的TCP连接防火墙**，您同样需要访问"https://yourURL:yourPort", 以使得浏览器信任自签名CA证书。
 
