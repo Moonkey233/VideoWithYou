@@ -21,7 +21,7 @@
 // ==/UserScript==
 
 const url = "PlutoCharon.LOVE";
-const port = 2333
+const port = 1206
 
 class MyPlayer {
 	constructor() {
@@ -456,6 +456,12 @@ function recvJson(data) {
 			} else if (selectedMatch == 'fullMatch') {
 				clientUrl = window.location.href;
 				serverUrl = object['url'];
+				if (clientUrl.indexOf('?') > 0 && clientUrl[clientUrl.indexOf('?')-1] != '/') {
+					clientUrl = clientUrl.slice(0, clientUrl.indexOf('?')) + '/' + clientUrl.slice(clientUrl.indexOf('?'))
+				}
+				if (serverUrl.indexOf('?') > 0 && serverUrl[serverUrl.indexOf('?')-1] != '/') {
+					serverUrl = serverUrl.slice(0, serverUrl.indexOf('?')) + '/' + serverUrl.slice(serverUrl.indexOf('?'))
+				}
 				global.matchType = 'full';
 			} else {
 				global.matchType = 'no';
