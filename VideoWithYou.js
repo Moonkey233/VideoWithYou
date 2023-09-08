@@ -21,7 +21,7 @@
 // ==/UserScript==
 
 const url = "PlutoCharon.LOVE";
-const port = 1206
+const port = 2333
 
 class MyPlayer {
 	constructor() {
