@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VideoWithYou
 // @namespace    https://github.com/Moonkey233/VideoWithYou
-// @version      1.1.0
+// @version      1.1.1
 // @description  Different places, same video. A script that controls the synchronous play of video websites.
 // @author       Moonkey_ & Iris
 // @match        https://www.bilibili.com/*
