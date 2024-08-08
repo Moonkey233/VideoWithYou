@@ -3,8 +3,8 @@ const WebSocket = require('ws');
 const https = require('https');
 const port = 2333
 const options = {
-	key: fs.readFileSync('cert/plutocharon.love.key'),
-	cert: fs.readFileSync('cert/plutocharon.love.crt'),
+	key: fs.readFileSync('cert/moonkey.top.key'),
+	cert: fs.readFileSync('cert/moonkey.top.crt'),
 	rejectUnauthorized: false
 };
 const server = https.createServer(options);
