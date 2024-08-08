@@ -20,7 +20,7 @@
 // @grant        GM_getValue
 // ==/UserScript==
 
-const url = "PlutoCharon.LOVE";
+const url = "Moonkey.top";
 const port = 2333
 
 class MyPlayer {
