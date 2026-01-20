@@ -1,0 +1,115 @@
+syntax = "proto3";
+
+package videowithyou;
+
+option go_package = "videowithyou/v2/proto/gen;videowithyoupb";
+
+message Envelope {
+  oneof payload {
+    ClientHello client_hello = 1;
+    ServerHello server_hello = 2;
+    CreateRoomReq create_room_req = 3;
+    CreateRoomResp create_room_resp = 4;
+    JoinRoomReq join_room_req = 5;
+    JoinRoomResp join_room_resp = 6;
+    LeaveRoomReq leave_room_req = 7;
+    RoomSnapshot room_snapshot = 8;
+    HostState host_state = 9;
+    BroadcastState broadcast_state = 10;
+    TimeSyncReq time_sync_req = 11;
+    TimeSyncResp time_sync_resp = 12;
+    ErrorResp error_resp = 13;
+  }
+}
+
+message ClientHello {
+  string client_name = 1;
+  string client_version = 2;
+}
+
+message ServerHello {
+  string client_id = 1;
+  int64 server_time_ms = 2;
+}
+
+message CreateRoomReq {
+  string client_id = 1;
+}
+
+message CreateRoomResp {
+  string room_id = 1;
+  string room_code = 2;
+  int64 server_time_ms = 3;
+}
+
+message JoinRoomReq {
+  string client_id = 1;
+  string room_code = 2;
+}
+
+message JoinRoomResp {
+  string room_id = 1;
+  string host_id = 2;
+  int64 server_time_ms = 3;
+}
+
+message LeaveRoomReq {
+  string client_id = 1;
+  string room_id = 2;
+}
+
+message Member {
+  string member_id = 1;
+  string display_name = 2;
+  bool is_host = 3;
+}
+
+message MediaInfo {
+  string url = 1;
+  string title = 2;
+  string site = 3;
+  map<string, string> attrs = 4;
+}
+
+message HostState {
+  string room_id = 1;
+  string host_id = 2;
+  uint64 seq = 3;
+  MediaInfo media = 4;
+  int64 position_ms = 5;
+  double rate = 6;
+  bool paused = 7;
+  int64 sample_server_time_ms = 8;
+  int64 offset_ms = 9;
+}
+
+message BroadcastState {
+  HostState state = 1;
+  int64 server_time_ms = 2;
+  repeated Member members = 3;
+}
+
+message RoomSnapshot {
+  string room_id = 1;
+  string room_code = 2;
+  string host_id = 3;
+  repeated Member members = 4;
+  HostState latest_state = 5;
+  int64 server_time_ms = 6;
+}
+
+message TimeSyncReq {
+  int64 t1_local_ms = 1;
+}
+
+message TimeSyncResp {
+  int64 t1_local_ms = 1;
+  int64 t2_server_ms = 2;
+  int64 t3_server_ms = 3;
+  int64 server_time_ms = 4;
+}
+
+message ErrorResp {
+  string message = 1;
+  int64 server_time_ms = 2;
+}

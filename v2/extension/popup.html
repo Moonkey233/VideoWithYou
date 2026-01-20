@@ -1,0 +1,221 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>❤ VideoWithYou ❤</title>
+    <style>
+      :root {
+        --bg-1: #0f1f2e;
+        --bg-2: #102b3b;
+        --accent: #f9d65c;
+        --accent-2: #35c0a1;
+        --text: #f6f3ea;
+        --muted: #a7b4c2;
+        --panel: rgba(255, 255, 255, 0.08);
+        --event: #9fd3ff;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+        background: radial-gradient(140% 140% at 20% 0%, var(--bg-2), var(--bg-1));
+        color: var(--text);
+        min-width: 320px;
+      }
+      #app {
+        padding: 16px;
+        display: grid;
+        gap: 14px;
+      }
+      header {
+        display: grid;
+        gap: 6px;
+      }
+      header h1 {
+        margin: 0;
+        font-size: 18px;
+        letter-spacing: 0.6px;
+      }
+      header p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .panel {
+        background: var(--panel);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        padding: 12px;
+      }
+      [hidden] {
+        display: none !important;
+      }
+      .controls {
+        display: grid;
+        gap: 8px;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+      }
+      button {
+        border: none;
+        border-radius: 10px;
+        padding: 8px 12px;
+        font-weight: 600;
+        cursor: pointer;
+        background: var(--accent);
+        color: #232323;
+        transition: transform 0.08s ease, filter 0.15s ease;
+      }
+      button:hover {
+        filter: brightness(1.05);
+      }
+      button:active {
+        transform: scale(0.96);
+      }
+      button.secondary {
+        background: transparent;
+        color: var(--text);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+      }
+      button.copied {
+        background: var(--accent-2);
+        color: #06251f;
+      }
+      input[type="text"] {
+        width: 100%;
+        padding: 8px 10px;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(0, 0, 0, 0.2);
+        color: var(--text);
+      }
+      .settings {
+        display: grid;
+        gap: 10px;
+      }
+      .toggle {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .status {
+        display: grid;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .status-row {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .muted-value {
+        color: var(--muted);
+      }
+      .error {
+        color: #ff9d9d;
+        min-height: 14px;
+      }
+      .badges {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
+      .badge {
+        background: rgba(53, 192, 161, 0.18);
+        color: var(--accent-2);
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 11px;
+      }
+      .events {
+        display: grid;
+        gap: 4px;
+        max-height: 90px;
+        overflow: auto;
+        padding-top: 4px;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+      }
+      .events div {
+        color: var(--text);
+      }
+      .event-name {
+        color: var(--event);
+      }
+      .event-action {
+        color: var(--text);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <header>
+        <h1 style="color:#FFB6C1;">❤ VideoWithYou ❤</h1>
+        <p id="status">等待本地客户端...</p>
+      </header>
+
+      <section class="panel controls">
+        <div id="preRoom" class="controls">
+          <div class="row">
+            <input id="displayName" type="text" placeholder="昵称" />
+            <button id="createBtn">创建</button>
+          </div>
+          <div class="row">
+            <input id="joinCode" type="text" placeholder="房间号" />
+            <button id="joinBtn">加入</button>
+          </div>
+        </div>
+        <div id="inRoom" class="controls" hidden>
+          <div class="row">
+            <button id="copyBtn">复制房间号</button>
+            <button id="leaveBtn" class="secondary">离开</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel settings">
+        <div class="badges">
+          <span class="badge" id="roleBadge">角色: -</span>
+          <span class="badge" id="endpointBadge">模式: -</span>
+        </div>
+        <label class="toggle">
+          <input type="radio" name="endpoint" value="browser" checked />
+          在线浏览器
+        </label>
+        <label class="toggle">
+          <input type="radio" name="endpoint" value="potplayer" />
+          本地播放器
+        </label>
+        <label class="toggle">
+          <input id="followUrl" type="checkbox" checked />
+          跟随房主跳转 (仅限浏览器)
+        </label>
+        <div class="row">
+          <input id="clientPort" type="text" inputmode="numeric" placeholder="客户端端口" />
+          <button id="applyPortBtn" class="secondary">应用</button>
+        </div>
+      </section>
+
+      <section class="panel status">
+        <div class="status-row">
+          <span id="roomLabelPrefix">房间号: </span>
+          <span id="roomCode" class="muted-value">-</span>
+        </div>
+        <div class="status-row">
+          成员数量: <span id="membersCount" class="muted-value">-</span>
+        </div>
+        <div class="status-row">
+          最新同步时间: <span id="lastSync" class="muted-value">-</span>
+        </div>
+        <div id="error" class="error"></div>
+        <div id="roomEvents" class="events"></div>
+      </section>
+    </div>
+    <script type="module" src="/src/ui/popup.ts"></script>
+  </body>
+</html>
