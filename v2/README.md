@@ -54,9 +54,8 @@ Edit `v2/local-client/config.json`:
 - `endpoint`: `browser` or `potplayer`
 - `follow_url`: only applies for `browser`
 - `ext_listen_addr` / `ext_listen_path`: extension bridge endpoint
-- `ext_idle_timeout_sec`: auto leave room if no extension traffic (0 disables)
-- `keep_room_on_idle`: keep room connected even if extension goes idle
-- `host_idle_report_sec`: host idle state report interval (0 disables)
+- `ext_idle_timeout_sec`: browser endpoint idle window (0 disables)
+- `endpoint_inactive_timeout_sec`: follower leave timeout after endpoint missing (0 disables)
 - Sync knobs: `tick_ms`, `deadzone_ms`, `hard_seek_threshold_ms`, `soft_rate_*`, `offset_ms`
 - PotPlayer:
   - `potplayer.path`: full path to `PotPlayerMini64.exe`
@@ -73,6 +72,7 @@ Run each local client on a different port via `ext_listen_addr` (e.g. `127.0.0.1
 - `apply_state.position_ms` uses `-1` to signal "no seek" for rate-only adjustments.
 - Time sync uses NTP-style 4 timestamps; initial 5 samples pick the lowest-delay offset.
 - PotPlayer integration is best-effort (seek via command line + hotkeys for play/pause/rate).
+- Server closes rooms if the host stops reporting for `-host_idle_timeout_sec` (default 600s).
 
 ## Protobuf
 

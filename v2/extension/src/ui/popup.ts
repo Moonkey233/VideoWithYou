@@ -99,9 +99,6 @@ function localizeError(value: unknown): string {
   if (lower === "room closed (host left)") {
     return "房间已解散 (房主离开)";
   }
-  if (lower === "extension idle, left room") {
-    return "扩展空闲, 已退出房间";
-  }
   if (lower.includes("room closed")) {
     return "房间已解散";
   }

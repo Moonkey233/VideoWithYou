@@ -19,6 +19,7 @@ message Envelope {
     TimeSyncReq time_sync_req = 11;
     TimeSyncResp time_sync_resp = 12;
     ErrorResp error_resp = 13;
+    MemberStatus member_status = 14;
   }
 }
 
@@ -56,6 +57,12 @@ message JoinRoomResp {
 message LeaveRoomReq {
   string client_id = 1;
   string room_id = 2;
+}
+
+message MemberStatus {
+  string room_id = 1;
+  string member_id = 2;
+  bool active = 3;
 }
 
 message Member {

@@ -55,11 +55,6 @@ function isRoomClosedError(message: string): boolean {
   return lower.includes("room closed") || lower.includes("host left");
 }
 
-function isExtensionIdleError(message: string): boolean {
-  const lower = message.toLowerCase();
-  return lower.includes("extension idle");
-}
-
 function setFollowerTab(tabId: number | null) {
   followerTabId = tabId;
   if (typeof tabId === "number") {
@@ -116,12 +111,10 @@ function handleUiState(state: any) {
   }
 
   if (lastInRoom && !inRoom && error) {
-    if (!isExtensionIdleError(error)) {
-      if (roomClosed && shouldNotify("room_closed")) {
-        showNotify("\u623f\u4e3b\u5df2\u9000\u51fa, \u623f\u95f4\u5df2\u89e3\u6563");
-      } else if (!roomClosed && shouldNotify(`room_error:${error}`)) {
-        showNotify(`\u623f\u95f4\u5df2\u7ed3\u675f: ${error}`);
-      }
+    if (roomClosed && shouldNotify("room_closed")) {
+      showNotify("\u623f\u4e3b\u5df2\u9000\u51fa, \u623f\u95f4\u5df2\u89e3\u6563");
+    } else if (!roomClosed && shouldNotify(`room_error:${error}`)) {
+      showNotify(`\u623f\u95f4\u5df2\u7ed3\u675f: ${error}`);
     }
   } else if (inRoom && lastServerConnected === true && serverConnected === false) {
     if (shouldNotify("server_disconnected")) {

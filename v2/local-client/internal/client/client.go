@@ -46,32 +46,34 @@ type Client struct {
 	offsetMs atomic.Int64
 	tickMs   atomic.Int64
 
-	mu                sync.Mutex
-	role              Role
-	desiredRole       Role
-	desiredRoom       string
-	roomID            string
-	roomCode          string
-	hostID            string
-	clientID          string
-	membersCount      int
-	lastError         string
-	lastHostState     *videowithyoupb.HostState
-	lastHostURL       string
-	lastNavigateURL   string
-	lastNavigateAt    time.Time
-	lastExtURL        string
-	lastExtSite       string
-	lastExtSeen       time.Time
-	extIdleTriggered  bool
-	hostDisplayName   string
-	lastSyncAt        time.Time
-	lastSyncUIAt      time.Time
-	lastIdleReportAt  time.Time
-	roomEvents        []string
-	members           map[string]string
-	serverConnected   bool
-	pendingRoomAction bool
+	mu                     sync.Mutex
+	role                   Role
+	desiredRole            Role
+	desiredRoom            string
+	roomID                 string
+	roomCode               string
+	hostID                 string
+	clientID               string
+	membersCount           int
+	lastError              string
+	lastHostState          *videowithyoupb.HostState
+	lastHostURL            string
+	lastNavigateURL        string
+	lastNavigateAt         time.Time
+	lastExtURL             string
+	lastExtSite            string
+	lastExtSeen            time.Time
+	hostDisplayName        string
+	lastSyncAt             time.Time
+	lastSyncUIAt           time.Time
+	endpointActive         bool
+	endpointInactiveAt     time.Time
+	reportedEndpointSet    bool
+	reportedEndpointActive bool
+	roomEvents             []string
+	members                map[string]string
+	serverConnected        bool
+	pendingRoomAction      bool
 
 	timeSyncCh chan timeSyncSample
 }
@@ -149,11 +151,6 @@ func (c *Client) Start(ctx context.Context) {
 	go c.handleBridgeIncoming(ctx)
 	go c.syncLoop(ctx)
 	go c.timeSyncLoop(ctx)
-	go c.extIdleLoop(ctx)
-
-	c.mu.Lock()
-	c.lastExtSeen = time.Now()
-	c.mu.Unlock()
 	c.sendUIState()
 }
 
@@ -229,7 +226,7 @@ func (c *Client) handleCreateRoomResp(resp *videowithyoupb.CreateRoomResp) {
 	c.hostDisplayName = strings.TrimSpace(c.cfg.DisplayName)
 	c.lastSyncAt = time.Time{}
 	c.lastSyncUIAt = time.Time{}
-	c.lastIdleReportAt = time.Time{}
+	c.resetEndpointStatusLocked()
 	c.roomEvents = nil
 	c.members = nil
 	c.lastError = ""
@@ -257,12 +254,10 @@ func (c *Client) handleJoinRoomResp(resp *videowithyoupb.JoinRoomResp) {
 	c.lastNavigateAt = time.Time{}
 	c.lastExtURL = ""
 	c.lastExtSite = ""
-	c.lastExtSeen = time.Time{}
-	c.extIdleTriggered = false
 	c.hostDisplayName = ""
 	c.lastSyncAt = time.Time{}
 	c.lastSyncUIAt = time.Time{}
-	c.lastIdleReportAt = time.Time{}
+	c.resetEndpointStatusLocked()
 	c.roomEvents = nil
 	c.members = nil
 	c.lastError = ""
@@ -560,7 +555,6 @@ func (c *Client) handleUIAction(payload []byte, raw []byte) {
 func (c *Client) markExtSeen() {
 	c.mu.Lock()
 	c.lastExtSeen = time.Now()
-	c.extIdleTriggered = false
 	c.mu.Unlock()
 }
 
@@ -581,6 +575,7 @@ func (c *Client) markServerActivity() {
 func (c *Client) updateEndpoint(endpoint string) {
 	c.mu.Lock()
 	c.cfg.Endpoint = endpoint
+	c.resetEndpointStatusLocked()
 	cfg := c.cfg
 	c.mu.Unlock()
 
@@ -695,15 +690,21 @@ func (c *Client) clearRoomLocked() {
 	c.lastExtURL = ""
 	c.lastExtSite = ""
 	c.lastExtSeen = time.Time{}
-	c.extIdleTriggered = false
 	c.hostDisplayName = ""
 	c.lastSyncAt = time.Time{}
 	c.lastSyncUIAt = time.Time{}
-	c.lastIdleReportAt = time.Time{}
+	c.resetEndpointStatusLocked()
 	c.roomEvents = nil
 	c.members = nil
 	c.pendingRoomAction = false
 	c.lastError = ""
+}
+
+func (c *Client) resetEndpointStatusLocked() {
+	c.endpointActive = false
+	c.endpointInactiveAt = time.Time{}
+	c.reportedEndpointSet = false
+	c.reportedEndpointActive = false
 }
 
 func (c *Client) syncLoop(ctx context.Context) {
@@ -718,13 +719,60 @@ func (c *Client) syncLoop(ctx context.Context) {
 }
 
 func (c *Client) handleTick() {
+	now := time.Now()
 	c.mu.Lock()
 	role := c.role
 	roomID := c.roomID
 	hostState := c.lastHostState
 	offsetMs := c.offsetMs.Load()
 	localOffset := c.cfg.OffsetMS
+	endpoint := c.cfg.Endpoint
+	extIdleTimeoutSec := c.cfg.ExtIdleTimeoutSec
+	endpointInactiveTimeoutSec := c.cfg.EndpointInactiveTimeoutSec
+	lastExtSeen := c.lastExtSeen
+	adapter := c.adapter
+	prevActive := c.endpointActive
+	prevInactiveAt := c.endpointInactiveAt
+	reportedSet := c.reportedEndpointSet
+	reportedActive := c.reportedEndpointActive
 	c.mu.Unlock()
+
+	active := isEndpointActive(now, endpoint, adapter, lastExtSeen, extIdleTimeoutSec)
+	statusChanged := active != prevActive
+	if statusChanged {
+		c.log.Printf("endpoint %s active=%t", endpoint, active)
+	}
+
+	endpointInactiveAt := prevInactiveAt
+	if active {
+		endpointInactiveAt = time.Time{}
+	} else if endpointInactiveAt.IsZero() {
+		endpointInactiveAt = now
+	}
+
+	reportStatus := statusChanged || !reportedSet || reportedActive != active
+	c.mu.Lock()
+	c.endpointActive = active
+	c.endpointInactiveAt = endpointInactiveAt
+	if reportStatus {
+		c.reportedEndpointSet = true
+		c.reportedEndpointActive = active
+	}
+	c.mu.Unlock()
+
+	if reportStatus && role == RoleFollower && roomID != "" {
+		c.sendMemberStatus(roomID, active)
+	}
+
+	if !active {
+		if role == RoleFollower && roomID != "" && endpointInactiveTimeoutSec > 0 && !endpointInactiveAt.IsZero() {
+			if now.Sub(endpointInactiveAt) >= time.Duration(endpointInactiveTimeoutSec)*time.Second {
+				c.log.Printf("endpoint inactive >%ds, leaving room", endpointInactiveTimeoutSec)
+				c.sendLeaveRoom()
+			}
+		}
+		return
+	}
 
 	if role == RoleHost {
 		c.sendHostState(roomID, offsetMs)
@@ -740,59 +788,21 @@ func (c *Client) sendHostState(roomID string, offsetMs int64) {
 		return
 	}
 	state, ok := c.adapter.GetState()
-
-	c.mu.Lock()
-	seq := uint64(time.Now().UnixNano())
-	hostID := c.clientID
-	localOffset := c.cfg.OffsetMS
-	pageURL := c.lastExtURL
-	pageSite := c.lastExtSite
-	lastExtSeen := c.lastExtSeen
-	idleReportSec := c.cfg.HostIdleReportSec
-	lastIdleReportAt := c.lastIdleReportAt
-	c.mu.Unlock()
-
-	now := time.Now()
-	sampleServerTime := now.UnixMilli() + offsetMs
-	if !ok || time.Since(state.UpdatedAt) > 5*time.Second {
-		if pageURL == "" || (!lastExtSeen.IsZero() && time.Since(lastExtSeen) > 15*time.Second) {
-			return
-		}
-		if idleReportSec <= 0 {
-			return
-		}
-		if !lastIdleReportAt.IsZero() && now.Sub(lastIdleReportAt) < time.Duration(idleReportSec)*time.Second {
-			return
-		}
-		c.mu.Lock()
-		if !c.lastIdleReportAt.IsZero() && now.Sub(c.lastIdleReportAt) < time.Duration(idleReportSec)*time.Second {
-			c.mu.Unlock()
-			return
-		}
-		c.lastIdleReportAt = now
-		c.mu.Unlock()
-		hostState := &videowithyoupb.HostState{
-			RoomId:             roomID,
-			HostId:             hostID,
-			Seq:                seq,
-			PositionMs:         0,
-			Rate:               1,
-			Paused:             true,
-			SampleServerTimeMs: sampleServerTime,
-			OffsetMs:           localOffset,
-			Media: &videowithyoupb.MediaInfo{
-				Url:   pageURL,
-				Title: "",
-				Site:  pageSite,
-				Attrs: map[string]string{"page_only": "1"},
-			},
-		}
-		env := &videowithyoupb.Envelope{
-			Payload: &videowithyoupb.Envelope_HostState{HostState: hostState},
-		}
-		c.wsClient.Send(env)
+	if !ok {
 		return
 	}
+	if time.Since(state.UpdatedAt) > 5*time.Second {
+		return
+	}
+
+	c.mu.Lock()
+	now := time.Now()
+	seq := uint64(now.UnixNano())
+	hostID := c.clientID
+	localOffset := c.cfg.OffsetMS
+	c.mu.Unlock()
+
+	sampleServerTime := now.UnixMilli() + offsetMs
 	hostState := &videowithyoupb.HostState{
 		RoomId:             roomID,
 		HostId:             hostID,
@@ -816,6 +826,41 @@ func (c *Client) sendHostState(roomID string, offsetMs int64) {
 		Payload: &videowithyoupb.Envelope_HostState{HostState: hostState},
 	}
 	c.wsClient.Send(env)
+}
+
+func (c *Client) sendMemberStatus(roomID string, active bool) {
+	if roomID == "" {
+		return
+	}
+	env := &videowithyoupb.Envelope{
+		Payload: &videowithyoupb.Envelope_MemberStatus{
+			MemberStatus: &videowithyoupb.MemberStatus{
+				RoomId:   roomID,
+				MemberId: c.clientID,
+				Active:   active,
+			},
+		},
+	}
+	c.wsClient.Send(env)
+}
+
+func isEndpointActive(now time.Time, endpoint string, adapter adapter.Endpoint, lastSeen time.Time, idleTimeoutSec int64) bool {
+	if endpoint == "potplayer" {
+		if adapter == nil {
+			return false
+		}
+		if checker, ok := adapter.(interface{ IsAvailable() bool }); ok {
+			return checker.IsAvailable()
+		}
+		return false
+	}
+	if idleTimeoutSec <= 0 {
+		return true
+	}
+	if lastSeen.IsZero() {
+		return false
+	}
+	return now.Sub(lastSeen) < time.Duration(idleTimeoutSec)*time.Second
 }
 
 func (c *Client) shouldNavigate(hostURL, currentURL string) bool {
@@ -942,51 +987,6 @@ func (c *Client) timeSyncLoop(ctx context.Context) {
 			c.runSingleTimeSync()
 		}
 	}
-}
-
-func (c *Client) extIdleLoop(ctx context.Context) {
-	ticker := time.NewTicker(2 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			c.checkExtIdle()
-		}
-	}
-}
-
-func (c *Client) checkExtIdle() {
-	c.mu.Lock()
-	timeoutSec := c.cfg.ExtIdleTimeoutSec
-	keepRoomOnIdle := c.cfg.KeepRoomOnIdle
-	endpoint := c.cfg.Endpoint
-	lastSeen := c.lastExtSeen
-	inRoom := c.role != RoleNone && c.roomID != ""
-	alreadyTriggered := c.extIdleTriggered
-	c.mu.Unlock()
-
-	if timeoutSec <= 0 || !inRoom || alreadyTriggered || keepRoomOnIdle || endpoint == "potplayer" {
-		return
-	}
-	if lastSeen.IsZero() {
-		return
-	}
-
-	if time.Since(lastSeen) < time.Duration(timeoutSec)*time.Second {
-		return
-	}
-
-	c.log.Printf("extension idle >%ds, leaving room", timeoutSec)
-	c.sendLeaveRoom()
-
-	c.mu.Lock()
-	c.extIdleTriggered = true
-	c.lastError = "extension idle, left room"
-	c.mu.Unlock()
-	c.sendUIState()
 }
 
 func (c *Client) runInitialTimeSync() {

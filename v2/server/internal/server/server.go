@@ -20,6 +20,8 @@ const (
 	writeWait  = 10 * time.Second
 	pongWait   = 30 * time.Second
 	pingPeriod = 15 * time.Second
+	hostIdleTimeoutDefault  = 600 * time.Second
+	hostIdleCheckInterval   = 5 * time.Second
 )
 
 var roomAlphabet = []byte("ABCDEFGHJKLMNPQRSTUVWXYZ23456789")
@@ -35,6 +37,7 @@ type Server struct {
 	rooms     map[string]*Room
 	roomCodes map[string]string
 	upgrader  websocket.Upgrader
+	hostIdleTimeout time.Duration
 }
 
 type Room struct {
@@ -43,6 +46,7 @@ type Room struct {
 	hostID      string
 	members     map[string]*Client
 	latestState *videowithyoupb.HostState
+	lastHostStateAt time.Time
 }
 
 type Client struct {
@@ -52,20 +56,31 @@ type Client struct {
 	send   chan []byte
 	roomID string
 	isHost bool
+	active bool
 }
 
 func NewServer(logger *log.Logger) *Server {
 	if logger == nil {
 		logger = log.Default()
 	}
-	return &Server{
+	srv := &Server{
 		log:       logger,
 		rooms:     make(map[string]*Room),
 		roomCodes: make(map[string]string),
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool { return true },
 		},
+		hostIdleTimeout: hostIdleTimeoutDefault,
 	}
+	go srv.hostIdleLoop()
+	return srv
+}
+
+func (s *Server) SetHostIdleTimeout(timeout time.Duration) {
+	if timeout <= 0 {
+		return
+	}
+	s.hostIdleTimeout = timeout
 }
 
 func (s *Server) HandleWS(w http.ResponseWriter, r *http.Request) {
@@ -79,6 +94,7 @@ func (s *Server) HandleWS(w http.ResponseWriter, r *http.Request) {
 		id:   randomID(),
 		conn: conn,
 		send: make(chan []byte, 64),
+		active: true,
 	}
 
 	conn.SetReadLimit(2 << 20)
@@ -178,6 +194,8 @@ func (s *Server) readLoop(client *Client) {
 			s.handleJoinRoom(client, payload.JoinRoomReq)
 		case *videowithyoupb.Envelope_LeaveRoomReq:
 			s.handleLeaveRoom(client, payload.LeaveRoomReq)
+		case *videowithyoupb.Envelope_MemberStatus:
+			s.handleMemberStatus(client, payload.MemberStatus)
 		case *videowithyoupb.Envelope_HostState:
 			s.handleHostState(client, payload.HostState)
 		case *videowithyoupb.Envelope_TimeSyncReq:
@@ -223,9 +241,11 @@ func (s *Server) handleCreateRoom(client *Client, _ *videowithyoupb.CreateRoomRe
 		code:    roomCode,
 		hostID:  client.id,
 		members: map[string]*Client{client.id: client},
+		lastHostStateAt: time.Now(),
 	}
 	client.roomID = roomID
 	client.isHost = true
+	client.active = true
 
 	s.mu.Lock()
 	s.rooms[roomID] = room
@@ -268,6 +288,7 @@ func (s *Server) handleJoinRoom(client *Client, req *videowithyoupb.JoinRoomReq)
 	room.members[client.id] = client
 	client.roomID = roomID
 	client.isHost = false
+	client.active = true
 	s.mu.Unlock()
 
 	s.log.Printf("room join %s (%s) member=%s", roomID, room.code, client.id)
@@ -309,9 +330,28 @@ func (s *Server) handleHostState(client *Client, state *videowithyoupb.HostState
 		return
 	}
 	room.latestState = state
+	room.lastHostStateAt = time.Now()
 	s.mu.Unlock()
 
 	s.broadcastHostState(room, state)
+}
+
+func (s *Server) handleMemberStatus(client *Client, status *videowithyoupb.MemberStatus) {
+	if status == nil {
+		return
+	}
+	if status.MemberId != "" && status.MemberId != client.id {
+		return
+	}
+	s.mu.Lock()
+	room := s.rooms[client.roomID]
+	if room == nil || room.id != status.RoomId {
+		s.mu.Unlock()
+		return
+	}
+	client.active = status.Active
+	s.mu.Unlock()
+	s.log.Printf("member status room=%s member=%s active=%t", room.id, client.id, status.Active)
 }
 
 func (s *Server) broadcastHostState(room *Room, state *videowithyoupb.HostState) {
@@ -330,6 +370,9 @@ func (s *Server) broadcastHostState(room *Room, state *videowithyoupb.HostState)
 	s.mu.RLock()
 	for _, member := range room.members {
 		if member.id == room.hostID {
+			continue
+		}
+		if !member.active {
 			continue
 		}
 		targets = append(targets, member)
@@ -371,6 +414,52 @@ func (s *Server) handleTimeSync(client *Client, req *videowithyoupb.TimeSyncReq)
 		},
 	}
 	_ = s.sendEnvelope(client, resp)
+}
+
+func (s *Server) hostIdleLoop() {
+	ticker := time.NewTicker(hostIdleCheckInterval)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		now := time.Now()
+		type roomClose struct {
+			id      string
+			members []*Client
+		}
+		toClose := make([]roomClose, 0)
+
+		s.mu.Lock()
+		for _, room := range s.rooms {
+			if room == nil {
+				continue
+			}
+			last := room.lastHostStateAt
+			if last.IsZero() {
+				continue
+			}
+			if now.Sub(last) < s.hostIdleTimeout {
+				continue
+			}
+
+			members := make([]*Client, 0, len(room.members))
+			for _, member := range room.members {
+				member.roomID = ""
+				member.isHost = false
+				members = append(members, member)
+			}
+			delete(s.rooms, room.id)
+			delete(s.roomCodes, room.code)
+			toClose = append(toClose, roomClose{id: room.id, members: members})
+		}
+		s.mu.Unlock()
+
+		for _, item := range toClose {
+			for _, member := range item.members {
+				s.sendError(member, "room closed (host idle)")
+			}
+			s.log.Printf("room closed idle %s", item.id)
+		}
+	}
 }
 
 func (s *Server) broadcastRoomSnapshot(room *Room) {

@@ -1,9 +1,10 @@
 {
   "server_url": "ws://127.0.0.1:2333/ws",
-  "display_name": "爱你",
+  "display_name": "test",
   "ext_listen_addr": "127.0.0.1:27112",
   "ext_listen_path": "/ext",
   "ext_idle_timeout_sec": 30,
+  "endpoint_inactive_timeout_sec": 600,
   "endpoint": "browser",
   "follow_url": true,
   "tick_ms": 500,

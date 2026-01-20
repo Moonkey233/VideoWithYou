@@ -19,47 +19,45 @@ type PotPlayerConfig struct {
 }
 
 type Config struct {
-	ServerURL           string          `json:"server_url"`
-	DisplayName         string          `json:"display_name"`
-	ExtListenAddr       string          `json:"ext_listen_addr"`
-	ExtListenPath       string          `json:"ext_listen_path"`
-	ExtIdleTimeoutSec   int64           `json:"ext_idle_timeout_sec"`
-	KeepRoomOnIdle      bool            `json:"keep_room_on_idle"`
-	HostIdleReportSec   int64           `json:"host_idle_report_sec"`
-	Endpoint            string          `json:"endpoint"`
-	FollowURL           bool            `json:"follow_url"`
-	TickMS              int64           `json:"tick_ms"`
-	HardSeekThresholdMS int64           `json:"hard_seek_threshold_ms"`
-	DeadzoneMS          int64           `json:"deadzone_ms"`
-	SoftRateEnabled     bool            `json:"soft_rate_enabled"`
-	SoftRateThresholdMS int64           `json:"soft_rate_threshold_ms"`
-	SoftRateAdjust      float64         `json:"soft_rate_adjust"`
-	SoftRateMaxMS       int64           `json:"soft_rate_max_ms"`
-	OffsetMS            int64           `json:"offset_ms"`
-	TimeSyncIntervalSec int64           `json:"time_sync_interval_sec"`
-	PotPlayer           PotPlayerConfig `json:"potplayer"`
+	ServerURL                  string          `json:"server_url"`
+	DisplayName                string          `json:"display_name"`
+	ExtListenAddr              string          `json:"ext_listen_addr"`
+	ExtListenPath              string          `json:"ext_listen_path"`
+	ExtIdleTimeoutSec          int64           `json:"ext_idle_timeout_sec"`
+	EndpointInactiveTimeoutSec int64           `json:"endpoint_inactive_timeout_sec"`
+	Endpoint                   string          `json:"endpoint"`
+	FollowURL                  bool            `json:"follow_url"`
+	TickMS                     int64           `json:"tick_ms"`
+	HardSeekThresholdMS        int64           `json:"hard_seek_threshold_ms"`
+	DeadzoneMS                 int64           `json:"deadzone_ms"`
+	SoftRateEnabled            bool            `json:"soft_rate_enabled"`
+	SoftRateThresholdMS        int64           `json:"soft_rate_threshold_ms"`
+	SoftRateAdjust             float64         `json:"soft_rate_adjust"`
+	SoftRateMaxMS              int64           `json:"soft_rate_max_ms"`
+	OffsetMS                   int64           `json:"offset_ms"`
+	TimeSyncIntervalSec        int64           `json:"time_sync_interval_sec"`
+	PotPlayer                  PotPlayerConfig `json:"potplayer"`
 }
 
 func DefaultConfig() Config {
 	return Config{
-		ServerURL:           "ws://127.0.0.1:2333/ws",
-		DisplayName:         "",
-		ExtListenAddr:       "127.0.0.1:27111",
-		ExtListenPath:       "/ext",
-		ExtIdleTimeoutSec:   30,
-		KeepRoomOnIdle:      true,
-		HostIdleReportSec:   180,
-		Endpoint:            "browser",
-		FollowURL:           true,
-		TickMS:              500,
-		HardSeekThresholdMS: 1000,
-		DeadzoneMS:          200,
-		SoftRateEnabled:     true,
-		SoftRateThresholdMS: 600,
-		SoftRateAdjust:      0.02,
-		SoftRateMaxMS:       3000,
-		OffsetMS:            0,
-		TimeSyncIntervalSec: 600,
+		ServerURL:                  "ws://127.0.0.1:2333/ws",
+		DisplayName:                "",
+		ExtListenAddr:              "127.0.0.1:27111",
+		ExtListenPath:              "/ext",
+		ExtIdleTimeoutSec:          30,
+		EndpointInactiveTimeoutSec: 600,
+		Endpoint:                   "browser",
+		FollowURL:                  true,
+		TickMS:                     500,
+		HardSeekThresholdMS:        1000,
+		DeadzoneMS:                 200,
+		SoftRateEnabled:            true,
+		SoftRateThresholdMS:        600,
+		SoftRateAdjust:             0.02,
+		SoftRateMaxMS:              3000,
+		OffsetMS:                   0,
+		TimeSyncIntervalSec:        600,
 		PotPlayer: PotPlayerConfig{
 			Path: "",
 			Hotkeys: PotPlayerHotkeys{
