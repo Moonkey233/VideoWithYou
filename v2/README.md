@@ -55,6 +55,8 @@ Edit `v2/local-client/config.json`:
 - `follow_url`: only applies for `browser`
 - `ext_listen_addr` / `ext_listen_path`: extension bridge endpoint
 - `ext_idle_timeout_sec`: auto leave room if no extension traffic (0 disables)
+- `keep_room_on_idle`: keep room connected even if extension goes idle
+- `host_idle_report_sec`: host idle state report interval (0 disables)
 - Sync knobs: `tick_ms`, `deadzone_ms`, `hard_seek_threshold_ms`, `soft_rate_*`, `offset_ms`
 - PotPlayer:
   - `potplayer.path`: full path to `PotPlayerMini64.exe`

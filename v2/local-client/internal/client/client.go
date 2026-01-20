@@ -67,6 +67,7 @@ type Client struct {
 	hostDisplayName   string
 	lastSyncAt        time.Time
 	lastSyncUIAt      time.Time
+	lastIdleReportAt  time.Time
 	roomEvents        []string
 	members           map[string]string
 	serverConnected   bool
@@ -228,6 +229,7 @@ func (c *Client) handleCreateRoomResp(resp *videowithyoupb.CreateRoomResp) {
 	c.hostDisplayName = strings.TrimSpace(c.cfg.DisplayName)
 	c.lastSyncAt = time.Time{}
 	c.lastSyncUIAt = time.Time{}
+	c.lastIdleReportAt = time.Time{}
 	c.roomEvents = nil
 	c.members = nil
 	c.lastError = ""
@@ -260,6 +262,7 @@ func (c *Client) handleJoinRoomResp(resp *videowithyoupb.JoinRoomResp) {
 	c.hostDisplayName = ""
 	c.lastSyncAt = time.Time{}
 	c.lastSyncUIAt = time.Time{}
+	c.lastIdleReportAt = time.Time{}
 	c.roomEvents = nil
 	c.members = nil
 	c.lastError = ""
@@ -696,6 +699,7 @@ func (c *Client) clearRoomLocked() {
 	c.hostDisplayName = ""
 	c.lastSyncAt = time.Time{}
 	c.lastSyncUIAt = time.Time{}
+	c.lastIdleReportAt = time.Time{}
 	c.roomEvents = nil
 	c.members = nil
 	c.pendingRoomAction = false
@@ -744,13 +748,29 @@ func (c *Client) sendHostState(roomID string, offsetMs int64) {
 	pageURL := c.lastExtURL
 	pageSite := c.lastExtSite
 	lastExtSeen := c.lastExtSeen
+	idleReportSec := c.cfg.HostIdleReportSec
+	lastIdleReportAt := c.lastIdleReportAt
 	c.mu.Unlock()
 
-	sampleServerTime := time.Now().UnixMilli() + offsetMs
+	now := time.Now()
+	sampleServerTime := now.UnixMilli() + offsetMs
 	if !ok || time.Since(state.UpdatedAt) > 5*time.Second {
 		if pageURL == "" || (!lastExtSeen.IsZero() && time.Since(lastExtSeen) > 15*time.Second) {
 			return
 		}
+		if idleReportSec <= 0 {
+			return
+		}
+		if !lastIdleReportAt.IsZero() && now.Sub(lastIdleReportAt) < time.Duration(idleReportSec)*time.Second {
+			return
+		}
+		c.mu.Lock()
+		if !c.lastIdleReportAt.IsZero() && now.Sub(c.lastIdleReportAt) < time.Duration(idleReportSec)*time.Second {
+			c.mu.Unlock()
+			return
+		}
+		c.lastIdleReportAt = now
+		c.mu.Unlock()
 		hostState := &videowithyoupb.HostState{
 			RoomId:             roomID,
 			HostId:             hostID,
@@ -941,12 +961,14 @@ func (c *Client) extIdleLoop(ctx context.Context) {
 func (c *Client) checkExtIdle() {
 	c.mu.Lock()
 	timeoutSec := c.cfg.ExtIdleTimeoutSec
+	keepRoomOnIdle := c.cfg.KeepRoomOnIdle
+	endpoint := c.cfg.Endpoint
 	lastSeen := c.lastExtSeen
 	inRoom := c.role != RoleNone && c.roomID != ""
 	alreadyTriggered := c.extIdleTriggered
 	c.mu.Unlock()
 
-	if timeoutSec <= 0 || !inRoom || alreadyTriggered {
+	if timeoutSec <= 0 || !inRoom || alreadyTriggered || keepRoomOnIdle || endpoint == "potplayer" {
 		return
 	}
 	if lastSeen.IsZero() {

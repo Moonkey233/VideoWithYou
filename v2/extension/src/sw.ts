@@ -16,6 +16,8 @@ let lastInRoom = false;
 let lastServerConnected: boolean | null = null;
 let lastNoticeKey = "";
 let lastNoticeAt = 0;
+let currentRole = "";
+let followerTabId: number | null = null;
 
 function notifyClientStatus(connected: boolean) {
   if (!connected) {
@@ -58,6 +60,48 @@ function isExtensionIdleError(message: string): boolean {
   return lower.includes("extension idle");
 }
 
+function setFollowerTab(tabId: number | null) {
+  followerTabId = tabId;
+  if (typeof tabId === "number") {
+    lastTabId = tabId;
+  }
+}
+
+function selectFollowerTabFromActive() {
+  if (typeof activeTabId === "number") {
+    setFollowerTab(activeTabId);
+    return;
+  }
+  chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
+    const tab = tabs[0];
+    if (tab?.id) {
+      activeTabId = tab.id;
+      if (typeof tab.windowId === "number") {
+        activeWindowId = tab.windowId;
+      }
+      setFollowerTab(tab.id);
+    }
+  });
+}
+
+function shouldAcceptStateFromTab(sender: chrome.runtime.MessageSender): boolean {
+  const tab = sender.tab;
+  if (!tab || typeof tab.id !== "number") {
+    return false;
+  }
+  if (currentRole === "follower") {
+    if (followerTabId === null) {
+      if (!isFromActiveTab(sender)) {
+        return false;
+      }
+      setFollowerTab(tab.id);
+      return true;
+    }
+    return tab.id === followerTabId;
+  }
+  return isFromActiveTab(sender);
+}
+
 function handleUiState(state: any) {
   const role = typeof state?.role === "string" ? state.role : "";
   const inRoom = role === "host" || role === "follower";
@@ -85,6 +129,12 @@ function handleUiState(state: any) {
     }
   }
 
+  if (role !== "follower") {
+    followerTabId = null;
+  } else if (followerTabId === null) {
+    selectFollowerTabFromActive();
+  }
+  currentRole = role;
   lastInRoom = inRoom;
   lastServerConnected = serverConnected;
 }
@@ -231,7 +281,8 @@ function handleClientMessage(msg: any) {
 }
 
 function forwardToTab(msg: any) {
-  const targetTab = msg.payload?.tabId ?? activeTabId ?? lastTabId;
+  const preferredTab = currentRole === "follower" ? followerTabId : activeTabId;
+  const targetTab = msg.payload?.tabId ?? preferredTab ?? lastTabId;
   if (typeof targetTab === "number") {
     chrome.tabs.sendMessage(targetTab, msg);
     return;
@@ -256,6 +307,9 @@ function refreshActiveTab(windowId?: number) {
       activeTabId = tab.id;
       if (typeof tab.windowId === "number") {
         activeWindowId = tab.windowId;
+      }
+      if (currentRole === "follower" && followerTabId === null) {
+        setFollowerTab(tab.id);
       }
     }
   });
@@ -285,15 +339,24 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
     setClientPort(msg.payload?.port);
     return;
   }
+  if (msg.type === "ui_action") {
+    const action = msg.payload?.action;
+    if (action === "join_room") {
+      selectFollowerTabFromActive();
+    } else if (action === "leave_room" || action === "create_room") {
+      followerTabId = null;
+    }
+  }
 
   const fromTab = Boolean(sender.tab?.id);
   if (fromTab) {
-    const isStateMsg = msg.type === "player_state" || msg.type === "ext_hello";
-    const fromActive = isFromActiveTab(sender);
-    if (isStateMsg && !fromActive) {
+    const isStateMsg =
+      msg.type === "player_state" || msg.type === "ext_hello" || msg.type === "ext_ping";
+    const acceptState = shouldAcceptStateFromTab(sender);
+    if (isStateMsg && !acceptState) {
       return;
     }
-    if (fromActive && sender.tab?.id) {
+    if (isStateMsg && sender.tab?.id && acceptState) {
       lastTabId = sender.tab.id;
     }
   }
@@ -304,6 +367,9 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
 chrome.tabs.onActivated.addListener((info) => {
   activeTabId = info.tabId;
   activeWindowId = info.windowId;
+  if (currentRole === "follower" && followerTabId === null) {
+    setFollowerTab(info.tabId);
+  }
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
@@ -312,6 +378,12 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   }
   if (tabId === lastTabId) {
     lastTabId = null;
+  }
+  if (tabId === followerTabId) {
+    followerTabId = null;
+    if (currentRole === "follower") {
+      selectFollowerTabFromActive();
+    }
   }
 });
 

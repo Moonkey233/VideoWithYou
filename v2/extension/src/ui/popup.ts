@@ -31,6 +31,12 @@ const roomEvents: string[] = [];
 const maxEvents = 6;
 const eventSuffixes = ["进入了房间", "离开了房间"];
 
+function scrollEventsToBottom() {
+  window.requestAnimationFrame(() => {
+    eventsEl.scrollTop = eventsEl.scrollHeight;
+  });
+}
+
 function updateStatus() {
   if (!localConnected) {
     statusEl.textContent = "本地客户端未连接";
@@ -130,6 +136,7 @@ function renderEvents() {
     }
     eventsEl.appendChild(div);
   }
+  scrollEventsToBottom();
 }
 
 function splitEventMessage(message: string): { name: string; action: string } | null {

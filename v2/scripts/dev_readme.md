@@ -39,6 +39,8 @@ Open the popup in the browser to create/join rooms. The extension connects to
 `v2/local-client/config.json` controls:
 - `ext_listen_addr` / `ext_listen_path`: extension bridge endpoint
 - `ext_idle_timeout_sec`: auto leave room if no extension traffic (0 disables)
+- `keep_room_on_idle`: keep room connected even if extension goes idle
+- `host_idle_report_sec`: host idle state report interval (0 disables)
 - `endpoint`: `browser` or `potplayer`
 - `follow_url`: browser follower auto navigation
 - sync parameters (`tick_ms`, `deadzone_ms`, etc)

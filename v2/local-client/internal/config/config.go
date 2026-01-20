@@ -24,6 +24,8 @@ type Config struct {
 	ExtListenAddr       string          `json:"ext_listen_addr"`
 	ExtListenPath       string          `json:"ext_listen_path"`
 	ExtIdleTimeoutSec   int64           `json:"ext_idle_timeout_sec"`
+	KeepRoomOnIdle      bool            `json:"keep_room_on_idle"`
+	HostIdleReportSec   int64           `json:"host_idle_report_sec"`
 	Endpoint            string          `json:"endpoint"`
 	FollowURL           bool            `json:"follow_url"`
 	TickMS              int64           `json:"tick_ms"`
@@ -45,6 +47,8 @@ func DefaultConfig() Config {
 		ExtListenAddr:       "127.0.0.1:27111",
 		ExtListenPath:       "/ext",
 		ExtIdleTimeoutSec:   30,
+		KeepRoomOnIdle:      true,
+		HostIdleReportSec:   180,
 		Endpoint:            "browser",
 		FollowURL:           true,
 		TickMS:              500,
