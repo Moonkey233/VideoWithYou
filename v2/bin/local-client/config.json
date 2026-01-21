@@ -1,6 +1,6 @@
 {
   "server_url": "ws://moonkey.top:9012/ws",
-  "display_name": "想你",
+  "display_name": "",
   "ext_listen_addr": "127.0.0.1:23333",
   "ext_listen_path": "/ext",
   "ext_idle_timeout_sec": 30,
