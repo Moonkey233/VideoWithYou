@@ -51,15 +51,18 @@ Open the popup in the browser to create/join rooms.
 
 Edit `v2/local-client/config.json`:
 
-- `endpoint`: `browser` or `potplayer`
+- `endpoint`: `browser` or `mpc`
 - `follow_url`: only applies for `browser`
 - `ext_listen_addr` / `ext_listen_path`: extension bridge endpoint
 - `ext_idle_timeout_sec`: browser endpoint idle window (0 disables)
 - `endpoint_inactive_timeout_sec`: follower leave timeout after endpoint missing (0 disables)
 - Sync knobs: `tick_ms`, `deadzone_ms`, `hard_seek_threshold_ms`, `soft_rate_*`, `offset_ms`
-- PotPlayer:
-  - `potplayer.path`: full path to `PotPlayerMini64.exe`
-  - `potplayer.hotkeys`: hotkey strings (e.g. `CTRL+UP`)
+- MPC-BE (Web UI):
+  - Enable Web UI in MPC-BE settings (Web Interface) and set a port.
+  - `mpc.base_url`: MPC-BE Web UI base URL (e.g. `http://127.0.0.1:13579`)
+  - `mpc.variables_path`: defaults to `/variables.html`
+  - `mpc.commands.*`: command templates (relative or absolute). Use `POST /path|body` for form posts. Placeholders: `{ms}`, `{sec}`, `{hhmmss}`, `{hhmmssms}`, `{rate}`.
+  - MPC mode does not sync playback rate (pause/seek only).
 
 The client will persist config updates triggered from the UI.
 
@@ -71,7 +74,7 @@ Run each local client on a different port via `ext_listen_addr` (e.g. `127.0.0.1
 
 - `apply_state.position_ms` uses `-1` to signal "no seek" for rate-only adjustments.
 - Time sync uses NTP-style 4 timestamps; initial 5 samples pick the lowest-delay offset.
-- PotPlayer integration is best-effort (seek via command line + hotkeys for play/pause/rate).
+- MPC-BE integration uses its Web UI. If commands do not work, adjust `mpc.commands` based on your MPC-BE Web UI.
 - Server closes rooms if the host stops reporting for `-host_idle_timeout_sec` (default 600s).
 
 ## Protobuf
@@ -79,5 +82,5 @@ Run each local client on a different port via `ext_listen_addr` (e.g. `127.0.0.1
 If you change the schema:
 
 ```
-protoc --plugin=protoc-gen-go=$env:GOPATH\bin\protoc-gen-go.exe --go_out=proto/gen --go_opt=paths=source_relative proto/videowithyou.proto
+protoc --proto_path=proto --plugin=protoc-gen-go=$env:GOPATH\bin\protoc-gen-go.exe --go_out=proto/gen --go_opt=paths=source_relative videowithyou.proto
 ```

@@ -16,12 +16,20 @@
   "soft_rate_max_ms": 3000,
   "offset_ms": 0,
   "time_sync_interval_sec": 600,
-  "potplayer": {
-    "path": "",
-    "hotkeys": {
-      "play_pause": "SPACE",
-      "rate_up": "CTRL+UP",
-      "rate_down": "CTRL+DOWN"
-    }
+  "mpc": {
+    "base_url": "http://127.0.0.1:13579",
+    "username": "",
+    "password": "",
+    "variables_path": "/variables.html",
+    "commands": {
+      "play_pause": "POST /command.html|wm_command=889&null=0",
+      "play": "POST /command.html|wm_command=887&null=0",
+      "pause": "POST /command.html|wm_command=888&null=0",
+      "rate_up": "POST /command.html|wm_command=895&null=0",
+      "rate_down": "POST /command.html|wm_command=894&null=0",
+      "seek": "POST /command.html|wm_command=-1&position={hhmmss}",
+      "set_rate": ""
+    },
+    "timeout_ms": 800
   }
 }

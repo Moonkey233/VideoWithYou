@@ -83,15 +83,11 @@ func New(cfg config.Config, cfgPath string, host bridge.Host, logger *log.Logger
 		logger = log.Default()
 	}
 	browserAdapter := adapter.NewBrowserAdapter(host, logger, cfg.FollowURL)
-
-	syncCfg := syncer.Config{
-		HardSeekThresholdMS: cfg.HardSeekThresholdMS,
-		DeadzoneMS:          cfg.DeadzoneMS,
-		SoftRateEnabled:     cfg.SoftRateEnabled,
-		SoftRateThresholdMS: cfg.SoftRateThresholdMS,
-		SoftRateAdjust:      cfg.SoftRateAdjust,
-		SoftRateMaxMS:       cfg.SoftRateMaxMS,
+	endpointAdapter := adapter.Endpoint(browserAdapter)
+	if cfg.Endpoint == "mpc" {
+		endpointAdapter = adapter.NewMPCAdapter(cfg.MPC, logger)
 	}
+	syncCfg := syncConfigForEndpoint(cfg, cfg.Endpoint)
 
 	client := &Client{
 		log:        logger,
@@ -99,8 +95,8 @@ func New(cfg config.Config, cfgPath string, host bridge.Host, logger *log.Logger
 		cfgPath:    cfgPath,
 		wsClient:   ws.NewClient(cfg.ServerURL, logger),
 		extHost:    host,
-		adapter:    browserAdapter,
-		syncer:     syncer.NewCore(syncCfg, browserAdapter, logger),
+		adapter:    endpointAdapter,
+		syncer:     syncer.NewCore(syncCfg, endpointAdapter, logger),
 		timeSyncCh: make(chan timeSyncSample, 8),
 	}
 	client.tickMs.Store(cfg.TickMS)
@@ -580,15 +576,31 @@ func (c *Client) updateEndpoint(endpoint string) {
 	c.mu.Unlock()
 
 	switch endpoint {
-	case "potplayer":
-		c.adapter = adapter.NewPotPlayerAdapter(cfg.PotPlayer, c.log)
+	case "mpc":
+		c.adapter = adapter.NewMPCAdapter(cfg.MPC, c.log)
 	default:
 		c.adapter = adapter.NewBrowserAdapter(c.extHost, c.log, cfg.FollowURL)
 	}
 	c.syncer.UpdateAdapter(c.adapter)
+	c.syncer.UpdateConfig(syncConfigForEndpoint(cfg, endpoint))
 
 	_ = config.SaveConfig(c.cfgPath, cfg)
 	c.sendUIState()
+}
+
+func syncConfigForEndpoint(cfg config.Config, endpoint string) syncer.Config {
+	softRateEnabled := cfg.SoftRateEnabled
+	if endpoint == "mpc" {
+		softRateEnabled = false
+	}
+	return syncer.Config{
+		HardSeekThresholdMS: cfg.HardSeekThresholdMS,
+		DeadzoneMS:          cfg.DeadzoneMS,
+		SoftRateEnabled:     softRateEnabled,
+		SoftRateThresholdMS: cfg.SoftRateThresholdMS,
+		SoftRateAdjust:      cfg.SoftRateAdjust,
+		SoftRateMaxMS:       cfg.SoftRateMaxMS,
+	}
 }
 
 func (c *Client) updateFollowURL(enabled bool) {
@@ -610,14 +622,7 @@ func (c *Client) applyConfig(cfg config.Config) {
 	c.mu.Unlock()
 
 	c.tickMs.Store(cfg.TickMS)
-	c.syncer.UpdateConfig(syncer.Config{
-		HardSeekThresholdMS: cfg.HardSeekThresholdMS,
-		DeadzoneMS:          cfg.DeadzoneMS,
-		SoftRateEnabled:     cfg.SoftRateEnabled,
-		SoftRateThresholdMS: cfg.SoftRateThresholdMS,
-		SoftRateAdjust:      cfg.SoftRateAdjust,
-		SoftRateMaxMS:       cfg.SoftRateMaxMS,
-	})
+	c.syncer.UpdateConfig(syncConfigForEndpoint(cfg, cfg.Endpoint))
 
 	if previousEndpoint != cfg.Endpoint {
 		c.updateEndpoint(cfg.Endpoint)
@@ -845,7 +850,7 @@ func (c *Client) sendMemberStatus(roomID string, active bool) {
 }
 
 func isEndpointActive(now time.Time, endpoint string, adapter adapter.Endpoint, lastSeen time.Time, idleTimeoutSec int64) bool {
-	if endpoint == "potplayer" {
+	if endpoint == "mpc" {
 		if adapter == nil {
 			return false
 		}

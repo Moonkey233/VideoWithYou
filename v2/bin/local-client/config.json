@@ -1,6 +1,6 @@
 {
   "server_url": "ws://127.0.0.1:2333/ws",
-  "display_name": "test",
+  "display_name": "1",
   "ext_listen_addr": "127.0.0.1:27111",
   "ext_listen_path": "/ext",
   "ext_idle_timeout_sec": 30,
@@ -9,19 +9,27 @@
   "follow_url": true,
   "tick_ms": 500,
   "hard_seek_threshold_ms": 1000,
-  "deadzone_ms": 10,
+  "deadzone_ms": 200,
   "soft_rate_enabled": true,
   "soft_rate_threshold_ms": 600,
   "soft_rate_adjust": 0.02,
   "soft_rate_max_ms": 3000,
   "offset_ms": 0,
   "time_sync_interval_sec": 600,
-  "potplayer": {
-    "path": "",
-    "hotkeys": {
-      "play_pause": "SPACE",
-      "rate_up": "CTRL+UP",
-      "rate_down": "CTRL+DOWN"
-    }
+  "mpc": {
+    "base_url": "http://127.0.0.1:13579",
+    "username": "",
+    "password": "",
+    "variables_path": "/variables.html",
+    "commands": {
+      "play_pause": "POST /command.html|wm_command=889\u0026null=0",
+      "play": "POST /command.html|wm_command=887\u0026null=0",
+      "pause": "POST /command.html|wm_command=888\u0026null=0",
+      "rate_up": "POST /command.html|wm_command=895\u0026null=0",
+      "rate_down": "POST /command.html|wm_command=894\u0026null=0",
+      "seek": "POST /command.html|wm_command=-1\u0026position={hhmmss}",
+      "set_rate": ""
+    },
+    "timeout_ms": 800
   }
 }

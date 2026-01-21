@@ -18,6 +18,8 @@ let lastNoticeKey = "";
 let lastNoticeAt = 0;
 let currentRole = "";
 let followerTabId: number | null = null;
+const probeCooldownMs = 1500;
+const lastProbeAt = new Map<number, number>();
 
 function notifyClientStatus(connected: boolean) {
   if (!connected) {
@@ -55,6 +57,38 @@ function isRoomClosedError(message: string): boolean {
   return lower.includes("room closed") || lower.includes("host left");
 }
 
+function isTrackableUrl(value: string | undefined): boolean {
+  if (!value) {
+    return false;
+  }
+  return (
+    value.startsWith("http://") ||
+    value.startsWith("https://") ||
+    value.startsWith("file://")
+  );
+}
+
+function ensureContentScript(tabId: number, url?: string) {
+  if (!isTrackableUrl(url)) {
+    return;
+  }
+  const now = Date.now();
+  const last = lastProbeAt.get(tabId) ?? 0;
+  if (now - last < probeCooldownMs) {
+    return;
+  }
+  lastProbeAt.set(tabId, now);
+
+  chrome.tabs.sendMessage(tabId, { type: "ext_probe" }, () => {
+    if (!chrome.runtime.lastError) {
+      return;
+    }
+    chrome.scripting.executeScript({ target: { tabId }, files: ["content.js"] }, () => {
+      // ignore injection errors
+    });
+  });
+}
+
 function setFollowerTab(tabId: number | null) {
   followerTabId = tabId;
   if (typeof tabId === "number") {
@@ -62,11 +96,20 @@ function setFollowerTab(tabId: number | null) {
   }
 }
 
-function selectFollowerTabFromActive() {
-  if (typeof activeTabId === "number") {
-    setFollowerTab(activeTabId);
+function setFollowerTabFromTab(tab?: chrome.tabs.Tab) {
+  if (!tab || typeof tab.id !== "number") {
+    setFollowerTab(null);
     return;
   }
+  if (!isTrackableUrl(tab.url)) {
+    setFollowerTab(null);
+    return;
+  }
+  setFollowerTab(tab.id);
+  ensureContentScript(tab.id, tab.url);
+}
+
+function selectFollowerTabFromActive() {
   chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
     const tab = tabs[0];
     if (tab?.id) {
@@ -74,7 +117,10 @@ function selectFollowerTabFromActive() {
       if (typeof tab.windowId === "number") {
         activeWindowId = tab.windowId;
       }
-      setFollowerTab(tab.id);
+    }
+    setFollowerTabFromTab(tab);
+    if (tab?.id) {
+      ensureContentScript(tab.id, tab.url);
     }
   });
 }
@@ -86,10 +132,10 @@ function shouldAcceptStateFromTab(sender: chrome.runtime.MessageSender): boolean
   }
   if (currentRole === "follower") {
     if (followerTabId === null) {
-      if (!isFromActiveTab(sender)) {
+      if (!isTrackableUrl(tab.url)) {
         return false;
       }
-      setFollowerTab(tab.id);
+      setFollowerTabFromTab(tab);
       return true;
     }
     return tab.id === followerTabId;
@@ -214,6 +260,7 @@ function connectSocket() {
         socket.send(payload);
       }
     }
+    sendToClient({ type: "ui_action", payload: { action: "refresh_state" } });
   };
 
   socket.onmessage = (event) => {
@@ -302,7 +349,7 @@ function refreshActiveTab(windowId?: number) {
         activeWindowId = tab.windowId;
       }
       if (currentRole === "follower" && followerTabId === null) {
-        setFollowerTab(tab.id);
+        setFollowerTabFromTab(tab);
       }
     }
   });
@@ -313,15 +360,15 @@ function isFromActiveTab(sender: chrome.runtime.MessageSender): boolean {
   if (!tab || typeof tab.id !== "number") {
     return false;
   }
-  if (activeWindowId !== null && typeof tab.windowId === "number" && tab.windowId !== activeWindowId) {
-    return false;
-  }
   if (tab.active) {
     activeTabId = tab.id;
     if (typeof tab.windowId === "number") {
       activeWindowId = tab.windowId;
     }
     return true;
+  }
+  if (activeWindowId !== null && typeof tab.windowId === "number" && tab.windowId !== activeWindowId) {
+    return false;
   }
   return activeTabId !== null && tab.id === activeTabId;
 }
@@ -357,11 +404,19 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
   sendToClient(msg);
 });
 
-chrome.tabs.onActivated.addListener((info) => {
+  chrome.tabs.onActivated.addListener((info) => {
   activeTabId = info.tabId;
   activeWindowId = info.windowId;
   if (currentRole === "follower" && followerTabId === null) {
-    setFollowerTab(info.tabId);
+    chrome.tabs.get(info.tabId, (tab) => {
+      setFollowerTabFromTab(tab);
+    });
+  } else {
+    chrome.tabs.get(info.tabId, (tab) => {
+      if (tab?.id) {
+        ensureContentScript(tab.id, tab.url);
+      }
+    });
   }
 });
 
@@ -386,6 +441,18 @@ chrome.tabs.onUpdated.addListener((tabId, _changeInfo, tab) => {
     if (typeof tab.windowId === "number") {
       activeWindowId = tab.windowId;
     }
+    ensureContentScript(tabId, _changeInfo.url ?? tab.url);
+  }
+  if (tabId === followerTabId) {
+    const nextUrl = _changeInfo.url ?? tab.url;
+    if (!isTrackableUrl(nextUrl)) {
+      followerTabId = null;
+      if (currentRole === "follower") {
+        selectFollowerTabFromActive();
+      }
+    }
+  } else if (currentRole === "follower" && followerTabId === null && tab.active) {
+    setFollowerTabFromTab(tab);
   }
 });
 

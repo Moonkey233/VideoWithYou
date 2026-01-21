@@ -68,8 +68,8 @@ function formatEndpoint(value: unknown): string {
   switch (value) {
     case "browser":
       return "在线浏览器";
-    case "potplayer":
-      return "本地播放器";
+    case "mpc":
+      return "本地播放器 (MPC-BE)";
     default:
       return "-";
   }

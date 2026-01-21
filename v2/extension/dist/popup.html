@@ -33,6 +33,8 @@
       header {
         display: grid;
         gap: 6px;
+        position: relative;
+        padding-right: 20px;
       }
       header h1 {
         margin: 0;
@@ -43,6 +45,29 @@
         margin: 0;
         color: var(--muted);
         font-size: 12px;
+      }
+      .help-link {
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        color: var(--muted);
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        transition: color 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+      }
+      .help-link:hover {
+        color: var(--text);
+        border-color: var(--accent);
+      }
+      .help-link:active {
+        transform: scale(0.95);
       }
       .panel {
         background: var(--panel);
@@ -158,6 +183,7 @@
       <header>
         <h1 style="color:#FFB6C1;">❤ VideoWithYou ❤</h1>
         <p id="status">等待本地客户端...</p>
+        <a class="help-link" href="https://github.com/Moonkey233/VideoWithYou" target="_blank" rel="noreferrer">?</a>
       </header>
 
       <section class="panel controls">
@@ -189,8 +215,8 @@
           在线浏览器
         </label>
         <label class="toggle">
-          <input type="radio" name="endpoint" value="potplayer" />
-          本地播放器
+          <input type="radio" name="endpoint" value="mpc" />
+          本地播放器 (MPC-BE)
         </label>
         <label class="toggle">
           <input id="followUrl" type="checkbox" checked />

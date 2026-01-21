@@ -9,7 +9,7 @@ const adapters: IVideoAdapter[] = [
   createGenericAdapter("generic")
 ];
 
-const EXT_PING_INTERVAL_MS = 10000;
+const EXT_PING_INTERVAL_MS = 3000;
 
 let currentAdapter: IVideoAdapter = adapters[adapters.length - 1];
 let currentVideo: HTMLVideoElement | null = null;

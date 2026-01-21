@@ -355,17 +355,7 @@ func (s *Server) handleMemberStatus(client *Client, status *videowithyoupb.Membe
 }
 
 func (s *Server) broadcastHostState(room *Room, state *videowithyoupb.HostState) {
-	serverTime := time.Now().UnixMilli()
 	targets := make([]*Client, 0, len(room.members))
-
-	env := &videowithyoupb.Envelope{
-		Payload: &videowithyoupb.Envelope_BroadcastState{
-			BroadcastState: &videowithyoupb.BroadcastState{
-				State:        state,
-				ServerTimeMs: serverTime,
-			},
-		},
-	}
 
 	s.mu.RLock()
 	for _, member := range room.members {
@@ -378,6 +368,20 @@ func (s *Server) broadcastHostState(room *Room, state *videowithyoupb.HostState)
 		targets = append(targets, member)
 	}
 	s.mu.RUnlock()
+
+	if len(targets) == 0 {
+		return
+	}
+
+	serverTime := time.Now().UnixMilli()
+	env := &videowithyoupb.Envelope{
+		Payload: &videowithyoupb.Envelope_BroadcastState{
+			BroadcastState: &videowithyoupb.BroadcastState{
+				State:        state,
+				ServerTimeMs: serverTime,
+			},
+		},
+	}
 
 	payload, err := proto.Marshal(env)
 	if err != nil {

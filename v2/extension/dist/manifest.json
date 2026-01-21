@@ -11,10 +11,10 @@
     "type": "module"
   },
   "permissions": ["tabs", "scripting", "storage"],
-  "host_permissions": ["*://*/*", "ws://127.0.0.1/*"],
+  "host_permissions": ["*://*/*", "file://*/*", "ws://127.0.0.1/*"],
   "content_scripts": [
     {
-      "matches": ["*://*/*"],
+      "matches": ["*://*/*", "file://*/*"],
       "js": ["content.js"],
       "run_at": "document_idle",
       "type": "module"
