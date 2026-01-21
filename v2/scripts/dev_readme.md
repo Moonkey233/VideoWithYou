@@ -32,7 +32,7 @@ npm run build
 ```
 
 Open the popup in the browser to create/join rooms. The extension connects to
-`ws://127.0.0.1:27111/ext` by default (configurable via the popup `Client Port`).
+`ws://127.0.0.1:23333/ext` by default (configurable via the popup `Client Port`).
 
 ## Config
 

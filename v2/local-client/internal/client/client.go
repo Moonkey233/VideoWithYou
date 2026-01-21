@@ -805,6 +805,7 @@ func (c *Client) sendHostState(roomID string, offsetMs int64) {
 	seq := uint64(now.UnixNano())
 	hostID := c.clientID
 	localOffset := c.cfg.OffsetMS
+	endpoint := c.cfg.Endpoint
 	c.mu.Unlock()
 
 	sampleServerTime := now.UnixMilli() + offsetMs
@@ -818,7 +819,7 @@ func (c *Client) sendHostState(roomID string, offsetMs int64) {
 		SampleServerTimeMs: sampleServerTime,
 		OffsetMs:           localOffset,
 	}
-	if state.Media.URL != "" || state.Media.Title != "" {
+	if endpoint != "mpc" && (state.Media.URL != "" || state.Media.Title != "") {
 		hostState.Media = &videowithyoupb.MediaInfo{
 			Url:   state.Media.URL,
 			Title: state.Media.Title,

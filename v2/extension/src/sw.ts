@@ -1,5 +1,5 @@
 ﻿const DEFAULT_CLIENT_HOST = "127.0.0.1";
-const DEFAULT_CLIENT_PORT = 27111;
+const DEFAULT_CLIENT_PORT = 23333;
 const DEFAULT_CLIENT_PATH = "/ext";
 
 let socket: WebSocket | null = null;
@@ -17,9 +17,18 @@ let lastServerConnected: boolean | null = null;
 let lastNoticeKey = "";
 let lastNoticeAt = 0;
 let currentRole = "";
+let currentEndpoint = "browser";
 let followerTabId: number | null = null;
 const probeCooldownMs = 1500;
 const lastProbeAt = new Map<number, number>();
+
+function isBrowserEndpoint() {
+  return currentEndpoint === "browser";
+}
+
+function canSelectFollowerTab() {
+  return currentRole === "follower" && isBrowserEndpoint();
+}
 
 function notifyClientStatus(connected: boolean) {
   if (!connected) {
@@ -105,11 +114,17 @@ function setFollowerTabFromTab(tab?: chrome.tabs.Tab) {
     setFollowerTab(null);
     return;
   }
+  if (!canSelectFollowerTab()) {
+    return;
+  }
   setFollowerTab(tab.id);
   ensureContentScript(tab.id, tab.url);
 }
 
 function selectFollowerTabFromActive() {
+  if (!canSelectFollowerTab()) {
+    return;
+  }
   chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
     const tab = tabs[0];
     if (tab?.id) {
@@ -125,9 +140,47 @@ function selectFollowerTabFromActive() {
   });
 }
 
+function ensureFollowerTabReady() {
+  if (!canSelectFollowerTab()) {
+    return;
+  }
+  if (typeof followerTabId === "number") {
+    chrome.tabs.get(followerTabId, (tab) => {
+      if (chrome.runtime.lastError || !tab || !isTrackableUrl(tab.url)) {
+        followerTabId = null;
+        selectFollowerTabFromActive();
+        return;
+      }
+      ensureContentScript(tab.id, tab.url);
+    });
+    return;
+  }
+  selectFollowerTabFromActive();
+}
+
+function ensureHostActiveTab() {
+  if (currentRole !== "host" || !isBrowserEndpoint()) {
+    return;
+  }
+  chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
+    const tab = tabs[0];
+    if (!tab?.id) {
+      return;
+    }
+    activeTabId = tab.id;
+    if (typeof tab.windowId === "number") {
+      activeWindowId = tab.windowId;
+    }
+    ensureContentScript(tab.id, tab.url);
+  });
+}
+
 function shouldAcceptStateFromTab(sender: chrome.runtime.MessageSender): boolean {
   const tab = sender.tab;
   if (!tab || typeof tab.id !== "number") {
+    return false;
+  }
+  if (!isBrowserEndpoint()) {
     return false;
   }
   if (currentRole === "follower") {
@@ -145,11 +198,15 @@ function shouldAcceptStateFromTab(sender: chrome.runtime.MessageSender): boolean
 
 function handleUiState(state: any) {
   const role = typeof state?.role === "string" ? state.role : "";
+  const endpoint = typeof state?.endpoint === "string" ? state.endpoint : "";
+  const previousRole = currentRole;
+  const previousEndpoint = currentEndpoint;
   const inRoom = role === "host" || role === "follower";
   const serverConnected =
     typeof state?.server_connected === "boolean" ? state.server_connected : null;
   const error = typeof state?.last_error === "string" ? state.last_error.trim() : "";
   const roomClosed = error ? isRoomClosedError(error) : false;
+  const endpointChanged = endpoint !== "" && endpoint !== previousEndpoint;
 
   if (!lastInRoom && inRoom) {
     lastNoticeKey = "";
@@ -168,12 +225,24 @@ function handleUiState(state: any) {
     }
   }
 
-  if (role !== "follower") {
-    followerTabId = null;
-  } else if (followerTabId === null) {
-    selectFollowerTabFromActive();
+  if (endpoint !== "") {
+    currentEndpoint = endpoint;
   }
   currentRole = role;
+
+  if (role !== "follower") {
+    followerTabId = null;
+  } else if (isBrowserEndpoint()) {
+    if (endpointChanged) {
+      ensureFollowerTabReady();
+    } else if (followerTabId === null) {
+      selectFollowerTabFromActive();
+    }
+  }
+
+  if ((endpointChanged || previousRole !== role) && role === "host" && isBrowserEndpoint()) {
+    ensureHostActiveTab();
+  }
   lastInRoom = inRoom;
   lastServerConnected = serverConnected;
 }
@@ -348,6 +417,9 @@ function refreshActiveTab(windowId?: number) {
       if (typeof tab.windowId === "number") {
         activeWindowId = tab.windowId;
       }
+      if (currentRole === "host" && isBrowserEndpoint()) {
+        ensureContentScript(tab.id, tab.url);
+      }
       if (currentRole === "follower" && followerTabId === null) {
         setFollowerTabFromTab(tab);
       }
@@ -382,7 +454,9 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
   if (msg.type === "ui_action") {
     const action = msg.payload?.action;
     if (action === "join_room") {
-      selectFollowerTabFromActive();
+      if (isBrowserEndpoint()) {
+        selectFollowerTabFromActive();
+      }
     } else if (action === "leave_room" || action === "create_room") {
       followerTabId = null;
     }
@@ -407,7 +481,7 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
   chrome.tabs.onActivated.addListener((info) => {
   activeTabId = info.tabId;
   activeWindowId = info.windowId;
-  if (currentRole === "follower" && followerTabId === null) {
+  if (currentRole === "follower" && followerTabId === null && isBrowserEndpoint()) {
     chrome.tabs.get(info.tabId, (tab) => {
       setFollowerTabFromTab(tab);
     });
@@ -429,7 +503,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   }
   if (tabId === followerTabId) {
     followerTabId = null;
-    if (currentRole === "follower") {
+    if (currentRole === "follower" && isBrowserEndpoint()) {
       selectFollowerTabFromActive();
     }
   }
@@ -447,11 +521,16 @@ chrome.tabs.onUpdated.addListener((tabId, _changeInfo, tab) => {
     const nextUrl = _changeInfo.url ?? tab.url;
     if (!isTrackableUrl(nextUrl)) {
       followerTabId = null;
-      if (currentRole === "follower") {
+      if (currentRole === "follower" && isBrowserEndpoint()) {
         selectFollowerTabFromActive();
       }
     }
-  } else if (currentRole === "follower" && followerTabId === null && tab.active) {
+  } else if (
+    currentRole === "follower" &&
+    followerTabId === null &&
+    tab.active &&
+    isBrowserEndpoint()
+  ) {
     setFollowerTabFromTab(tab);
   }
 });

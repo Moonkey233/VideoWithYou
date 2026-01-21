@@ -19,13 +19,14 @@ const applyPortBtn = document.getElementById("applyPortBtn") as HTMLButtonElemen
 const createBtn = document.getElementById("createBtn") as HTMLButtonElement;
 const joinBtn = document.getElementById("joinBtn") as HTMLButtonElement;
 const leaveBtn = document.getElementById("leaveBtn") as HTMLButtonElement;
+const clientPortRow = document.getElementById("clientPortRow") as HTMLDivElement;
 
 let localConnected = false;
 let serverConnected: boolean | null = null;
 let currentRoomCode = "";
 let copyTimeout: number | undefined;
 const copyLabel = copyBtn.textContent || "复制房间号";
-const defaultClientPort = 27111;
+const defaultClientPort = 23333;
 let currentClientPort = defaultClientPort;
 const roomEvents: string[] = [];
 const maxEvents = 6;
@@ -349,7 +350,11 @@ chrome.runtime.onMessage.addListener((msg) => {
 });
 
 setClientPort(defaultClientPort);
-chrome.storage.local.get({ client_port: defaultClientPort }, (data) => {
+chrome.storage.local.get({ client_port: defaultClientPort, debug: false }, (data) => {
+  const debug = Boolean(data.debug);
+  if (clientPortRow) {
+    clientPortRow.hidden = !debug;
+  }
   const port = normalizePort(String(data.client_port));
   setClientPort(port ?? defaultClientPort);
 });

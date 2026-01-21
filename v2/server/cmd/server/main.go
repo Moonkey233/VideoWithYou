@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	addr := flag.String("addr", ":2333", "listen address")
+	addr := flag.String("addr", ":9012", "listen address")
 	path := flag.String("path", "/ws", "websocket path")
 	hostIdleTimeoutSec := flag.Int("host_idle_timeout_sec", 600, "close room if host idle (seconds)")
 	flag.Parse()

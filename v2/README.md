@@ -68,7 +68,7 @@ The client will persist config updates triggered from the UI.
 
 ## Multi-Client Local Test
 
-Run each local client on a different port via `ext_listen_addr` (e.g. `127.0.0.1:27111` and `127.0.0.1:27112`), then set the extension popup `Client Port` to match in each browser (Edge/Chrome).
+Run each local client on a different port via `ext_listen_addr` (e.g. `127.0.0.1:23333` and `127.0.0.1:23334`), then set the extension popup `Client Port` to match in each browser (Edge/Chrome).
 
 ## Notes
 
