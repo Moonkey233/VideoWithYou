@@ -65,7 +65,7 @@ func DefaultConfig() Config {
 		SoftRateAdjust:             0.02,
 		SoftRateMaxMS:              1000,
 		OffsetMS:                   0,
-		TimeSyncIntervalSec:        60,
+		TimeSyncIntervalSec:        600,
 		MPC: MPCConfig{
 			BaseURL:       "http://127.0.0.1:13579",
 			Username:      "",

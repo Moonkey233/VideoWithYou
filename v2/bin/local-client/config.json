@@ -15,7 +15,7 @@
   "soft_rate_adjust": 0.02,
   "soft_rate_max_ms": 1000,
   "offset_ms": 0,
-  "time_sync_interval_sec": 60,
+  "time_sync_interval_sec": 600,
   "mpc": {
     "base_url": "http://127.0.0.1:13579",
     "username": "",
