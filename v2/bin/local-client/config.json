@@ -5,7 +5,7 @@
   "ext_listen_path": "/ext",
   "ext_idle_timeout_sec": 30,
   "endpoint_inactive_timeout_sec": 600,
-  "endpoint": "browser",
+  "endpoint": "mpc",
   "follow_url": true,
   "tick_ms": 500,
   "hard_seek_threshold_ms": 600,

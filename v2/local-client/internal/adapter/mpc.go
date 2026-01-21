@@ -27,9 +27,12 @@ type MPCAdapter struct {
 	cfg    config.MPCConfig
 	client *http.Client
 
-	mu            sync.Mutex
-	lastState     model.PlayerState
-	lastAvailable time.Time
+	mu                sync.Mutex
+	lastState         model.PlayerState
+	lastAvailable     time.Time
+	lastControlAt     time.Time
+	lastControlPaused bool
+	hasControl        bool
 }
 
 func NewMPCAdapter(cfg config.MPCConfig, logger *log.Logger) *MPCAdapter {
@@ -87,6 +90,9 @@ func (m *MPCAdapter) ApplyState(state model.ApplyState) error {
 	m.mu.Lock()
 	last := m.lastState
 	hasLast := !last.UpdatedAt.IsZero()
+	lastControlAt := m.lastControlAt
+	lastControlPaused := m.lastControlPaused
+	hasControl := m.hasControl
 	m.mu.Unlock()
 
 	if state.PositionMs >= 0 {
@@ -100,18 +106,29 @@ func (m *MPCAdapter) ApplyState(state model.ApplyState) error {
 		}
 	}
 
-	if state.Paused {
-		if m.cfg.Commands.Pause != "" {
-			_ = m.sendCommand(m.cfg.Commands.Pause, nil)
-		} else if !hasLast || !last.Paused {
-			_ = m.sendCommand(m.cfg.Commands.PlayPause, nil)
+	shouldControl := true
+	if hasControl && lastControlPaused == state.Paused && time.Since(lastControlAt) < 2*time.Second {
+		shouldControl = false
+	}
+	if shouldControl {
+		if state.Paused {
+			if m.cfg.Commands.Pause != "" {
+				_ = m.sendCommand(m.cfg.Commands.Pause, nil)
+			} else if !hasLast || !last.Paused {
+				_ = m.sendCommand(m.cfg.Commands.PlayPause, nil)
+			}
+		} else {
+			if m.cfg.Commands.Play != "" {
+				_ = m.sendCommand(m.cfg.Commands.Play, nil)
+			} else if !hasLast || last.Paused {
+				_ = m.sendCommand(m.cfg.Commands.PlayPause, nil)
+			}
 		}
-	} else {
-		if m.cfg.Commands.Play != "" {
-			_ = m.sendCommand(m.cfg.Commands.Play, nil)
-		} else if !hasLast || last.Paused {
-			_ = m.sendCommand(m.cfg.Commands.PlayPause, nil)
-		}
+		m.mu.Lock()
+		m.lastControlAt = time.Now()
+		m.lastControlPaused = state.Paused
+		m.hasControl = true
+		m.mu.Unlock()
 	}
 
 	m.mu.Lock()
