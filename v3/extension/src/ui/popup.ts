@@ -1,4 +1,6 @@
 ﻿const statusEl = document.getElementById("status") as HTMLParagraphElement;
+export {};
+
 const roomLabelPrefixEl = document.getElementById("roomLabelPrefix") as HTMLSpanElement;
 const roomCodeEl = document.getElementById("roomCode") as HTMLSpanElement;
 const membersEl = document.getElementById("membersCount") as HTMLSpanElement;
@@ -7,6 +9,13 @@ const eventsEl = document.getElementById("roomEvents") as HTMLDivElement;
 const lastSyncEl = document.getElementById("lastSync") as HTMLSpanElement;
 const roleBadge = document.getElementById("roleBadge") as HTMLSpanElement;
 const endpointBadge = document.getElementById("endpointBadge") as HTMLSpanElement;
+const routeBadge = document.getElementById("routeBadge") as HTMLSpanElement;
+const connectionRouteEl = document.getElementById("connectionRoute") as HTMLSpanElement;
+const remoteAddressEl = document.getElementById("remoteAddress") as HTMLSpanElement;
+const connectionLatencyEl = document.getElementById("connectionLatency") as HTMLSpanElement;
+const ownerStatusRowEl = document.getElementById("ownerStatusRow") as HTMLDivElement;
+const tunnelStatusEl = document.getElementById("tunnelStatus") as HTMLSpanElement;
+const networkErrorEl = document.getElementById("networkError") as HTMLDivElement;
 const joinCodeEl = document.getElementById("joinCode") as HTMLInputElement;
 const displayNameEl = document.getElementById("displayName") as HTMLInputElement;
 const preRoomEl = document.getElementById("preRoom") as HTMLDivElement;
@@ -74,6 +83,64 @@ function formatEndpoint(value: unknown): string {
     default:
       return "-";
   }
+}
+
+function formatRoute(value: unknown): string {
+  switch (value) {
+    case "local":
+      return "本机服务端";
+    case "ipv6_direct":
+      return "IPv6 直连";
+    case "cloud_ipv4":
+      return "IPv4 云转发";
+    default:
+      return "检测中";
+  }
+}
+
+function formatConnectionStage(value: unknown): string {
+  switch (value) {
+    case "trying_local":
+      return "正在连接本机服务端";
+    case "trying_ipv6":
+      return "正在检测 IPv6 直连";
+    case "trying_cloud_ipv4":
+      return "正在切换到 IPv4 云转发";
+    case "retry_wait":
+      return "两条线路均失败，等待重试";
+    case "disconnected":
+      return "连接中断，准备重连";
+    case "configuration_error":
+      return "网络配置错误";
+    case "connected":
+      return "";
+    default:
+      return "正在连接";
+  }
+}
+
+function formatNetworkError(state: any): string {
+  const stage = formatConnectionStage(state.connection_stage);
+  const directError = typeof state.direct_error === "string" ? state.direct_error.trim() : "";
+  const cloudError = typeof state.cloud_error === "string" ? state.cloud_error.trim() : "";
+  const serverError =
+    typeof state.server_listen_error === "string" ? state.server_listen_error.trim() : "";
+  const tunnelError = typeof state.tunnel_error === "string" ? state.tunnel_error.trim() : "";
+  const messages: string[] = [];
+  if (stage) messages.push(stage);
+  if (directError && state.connection_route !== "ipv6_direct") {
+    messages.push(`IPv6: ${directError}`);
+  }
+  if (cloudError && !state.server_connected) {
+    messages.push(`云端: ${cloudError}`);
+  }
+  if (serverError) {
+    messages.push(`本机服务端: ${serverError}`);
+  }
+  if (state.server_role_enabled && tunnelError && !state.tunnel_connected) {
+    messages.push(`云隧道: ${tunnelError}`);
+  }
+  return messages.join("；");
 }
 
 function localizeError(value: unknown): string {
@@ -281,6 +348,13 @@ chrome.runtime.onMessage.addListener((msg) => {
       roomLabelPrefixEl.textContent = "房间号: ";
       roomCodeEl.textContent = "-";
       membersEl.textContent = "-";
+      routeBadge.textContent = "线路: 检测中";
+      connectionRouteEl.textContent = "检测中";
+      remoteAddressEl.textContent = "-";
+      connectionLatencyEl.textContent = "-";
+      ownerStatusRowEl.hidden = true;
+      tunnelStatusEl.textContent = "-";
+      networkErrorEl.textContent = "";
     }
     updateStatus();
     return;
@@ -315,6 +389,20 @@ chrome.runtime.onMessage.addListener((msg) => {
   membersEl.textContent = String(membersCount);
   roleBadge.textContent = `角色: ${formatRole(state.role)}`;
   endpointBadge.textContent = `模式: ${formatEndpoint(state.endpoint)}`;
+  const routeText = formatRoute(state.connection_route);
+  routeBadge.textContent = `线路: ${routeText}`;
+  connectionRouteEl.textContent =
+    state.server_connected === true ? routeText : formatConnectionStage(state.connection_stage);
+  remoteAddressEl.textContent = state.remote_address || "-";
+  connectionLatencyEl.textContent =
+    typeof state.latency_ms === "number" && state.server_connected
+      ? `${state.latency_ms} ms`
+      : "-";
+  ownerStatusRowEl.hidden = !Boolean(state.server_role_enabled);
+  if (state.server_role_enabled) {
+    tunnelStatusEl.textContent = state.tunnel_connected ? "已连接" : "未连接";
+  }
+  networkErrorEl.textContent = formatNetworkError(state);
   errorEl.textContent = localizeError(state.last_error);
   lastSyncEl.textContent = state.last_sync_time || "-";
   setEventsFromState(state.room_events);

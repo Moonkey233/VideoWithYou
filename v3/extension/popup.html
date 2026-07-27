@@ -148,6 +148,7 @@
       }
       .badges {
         display: flex;
+        flex-wrap: wrap;
         gap: 6px;
         align-items: center;
       }
@@ -208,6 +209,7 @@
         <div class="badges">
           <span class="badge" id="roleBadge">角色: -</span>
           <span class="badge" id="endpointBadge">模式: -</span>
+          <span class="badge" id="routeBadge">线路: 检测中</span>
         </div>
         <label class="toggle">
           <input type="radio" name="endpoint" value="browser" checked />
@@ -238,6 +240,19 @@
         <div class="status-row">
           最新同步时间: <span id="lastSync" class="muted-value">-</span>
         </div>
+        <div class="status-row">
+          当前线路: <span id="connectionRoute" class="muted-value">检测中</span>
+        </div>
+        <div class="status-row">
+          远端地址: <span id="remoteAddress" class="muted-value">-</span>
+        </div>
+        <div class="status-row">
+          连接延迟: <span id="connectionLatency" class="muted-value">-</span>
+        </div>
+        <div id="ownerStatusRow" class="status-row" hidden>
+          云回退隧道: <span id="tunnelStatus" class="muted-value">-</span>
+        </div>
+        <div id="networkError" class="error"></div>
         <div id="error" class="error"></div>
         <div id="roomEvents" class="events"></div>
       </section>

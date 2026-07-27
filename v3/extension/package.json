@@ -1,7 +1,7 @@
 {
   "name": "videowithyou-extension",
   "private": true,
-  "version": "0.1.0",
+  "version": "3.0.0",
   "type": "module",
   "scripts": {
     "build": "vite build && node scripts/copy-manifest.js",
@@ -11,6 +11,6 @@
   "devDependencies": {
     "@types/chrome": "^0.0.270",
     "typescript": "^5.5.4",
-    "vite": "^5.4.0"
+    "vite": "^6.4.3"
   }
 }

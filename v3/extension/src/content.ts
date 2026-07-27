@@ -43,7 +43,7 @@ function sendHello() {
     payload: {
       url: location.href,
       site: currentAdapter.name,
-      version: "v2"
+      version: "v3"
     }
   });
 }

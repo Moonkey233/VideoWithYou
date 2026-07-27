@@ -1,5 +1,41 @@
 {
-  "server_url": "ws://moonkey.top:9012/ws",
+  "server_url": "wss://ipv6.moonkey.top:21314/ws",
+  "connection": {
+    "direct_url": "wss://ipv6.moonkey.top:21314/ws",
+    "cloud_dial_address": "moonkey.top:21314",
+    "direct_timeout_ms": 3000,
+    "cloud_timeout_ms": 5000,
+    "retry_delay_ms": 2000,
+    "access_token": "",
+    "client_instance_id": "",
+    "session_token": ""
+  },
+  "server": {
+    "enabled": false,
+    "listen_address": "[::]:21314",
+    "path": "/ws",
+    "access_token": "",
+    "reconnect_grace_sec": 30,
+    "host_idle_timeout_sec": 600,
+    "tls": {
+      "mode": "acme",
+      "domain": "ipv6.moonkey.top",
+      "email": "",
+      "cache_dir": "",
+      "http_address": "[::]:80",
+      "cert_file": "",
+      "key_file": ""
+    }
+  },
+  "relay": {
+    "enabled": false,
+    "ssh_address": "moonkey.top:22",
+    "ssh_user": "videowithyou",
+    "private_key_path": "",
+    "host_key_pin_path": "",
+    "remote_listen_address": "0.0.0.0:21314",
+    "reconnect_delay_sec": 3
+  },
   "display_name": "",
   "ext_listen_addr": "127.0.0.1:23333",
   "ext_listen_path": "/ext",
@@ -8,12 +44,12 @@
   "endpoint": "browser",
   "follow_url": true,
   "tick_ms": 500,
-  "hard_seek_threshold_ms": 600,
-  "deadzone_ms": 200,
+  "hard_seek_threshold_ms": 2000,
+  "deadzone_ms": 1000,
   "soft_rate_enabled": true,
-  "soft_rate_threshold_ms": 400,
+  "soft_rate_threshold_ms": 1500,
   "soft_rate_adjust": 0.02,
-  "soft_rate_max_ms": 1000,
+  "soft_rate_max_ms": 2000,
   "offset_ms": 0,
   "time_sync_interval_sec": 600,
   "mpc": {

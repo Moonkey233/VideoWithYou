@@ -74,6 +74,11 @@ type Client struct {
 	members                map[string]string
 	serverConnected        bool
 	pendingRoomAction      bool
+	networkStatus          ws.Status
+	serverRoleEnabled      bool
+	serverListenError      string
+	tunnelConnected        bool
+	tunnelError            string
 
 	timeSyncCh chan timeSyncSample
 }
@@ -90,19 +95,27 @@ func New(cfg config.Config, cfgPath string, host bridge.Host, logger *log.Logger
 	syncCfg := syncConfigForEndpoint(cfg, cfg.Endpoint)
 
 	client := &Client{
-		log:        logger,
-		cfg:        cfg,
-		cfgPath:    cfgPath,
-		wsClient:   ws.NewClient(cfg.ServerURL, logger),
-		extHost:    host,
-		adapter:    endpointAdapter,
-		syncer:     syncer.NewCore(syncCfg, endpointAdapter, logger),
-		timeSyncCh: make(chan timeSyncSample, 8),
+		log:     logger,
+		cfg:     cfg,
+		cfgPath: cfgPath,
+		wsClient: ws.NewClient(ws.Config{
+			URL:              cfg.Connection.DirectURL,
+			CloudDialAddress: cfg.Connection.CloudDialAddress,
+			PreferLocal:      cfg.Server.Enabled,
+			DirectTimeout:    time.Duration(cfg.Connection.DirectTimeoutMS) * time.Millisecond,
+			CloudTimeout:     time.Duration(cfg.Connection.CloudTimeoutMS) * time.Millisecond,
+			RetryDelay:       time.Duration(cfg.Connection.RetryDelayMS) * time.Millisecond,
+		}, logger),
+		extHost:           host,
+		adapter:           endpointAdapter,
+		syncer:            syncer.NewCore(syncCfg, endpointAdapter, logger),
+		timeSyncCh:        make(chan timeSyncSample, 8),
+		serverRoleEnabled: cfg.Server.Enabled,
 	}
 	client.tickMs.Store(cfg.TickMS)
 
-	client.wsClient.SetOnConnect(func(conn *websocket.Conn) error {
-		hello := client.makeClientHello()
+	client.wsClient.SetOnConnect(func(conn *websocket.Conn, route ws.Route) error {
+		hello := client.makeClientHello(route)
 		payload, err := proto.Marshal(hello)
 		if err != nil {
 			return err
@@ -110,9 +123,10 @@ func New(cfg config.Config, cfgPath string, host bridge.Host, logger *log.Logger
 		return conn.WriteMessage(websocket.BinaryMessage, payload)
 	})
 
-	client.wsClient.SetOnStatus(func(connected bool) {
+	client.wsClient.SetOnStatus(func(status ws.Status) {
 		client.mu.Lock()
-		client.serverConnected = connected
+		client.serverConnected = status.Connected
+		client.networkStatus = status
 		client.mu.Unlock()
 		client.sendUIState()
 	})
@@ -121,23 +135,32 @@ func New(cfg config.Config, cfgPath string, host bridge.Host, logger *log.Logger
 	return client
 }
 
-func (c *Client) makeClientHello() *videowithyoupb.Envelope {
+func (c *Client) makeClientHello(route ws.Route) *videowithyoupb.Envelope {
+	c.mu.Lock()
 	displayName := strings.TrimSpace(c.cfg.DisplayName)
+	instanceID := c.cfg.Connection.ClientInstanceID
+	sessionToken := c.cfg.Connection.SessionToken
+	accessToken := c.cfg.Connection.AccessToken
+	c.mu.Unlock()
 	if displayName == "" {
-		displayName = "local-client"
+		displayName = "VideoWithYou"
 	}
 	return &videowithyoupb.Envelope{
 		Payload: &videowithyoupb.Envelope_ClientHello{
 			ClientHello: &videowithyoupb.ClientHello{
-				ClientName:    displayName,
-				ClientVersion: "v2",
+				ClientName:       displayName,
+				ClientVersion:    "v3",
+				ClientInstanceId: instanceID,
+				SessionToken:     sessionToken,
+				AccessToken:      accessToken,
+				ConnectionRoute:  string(route),
 			},
 		},
 	}
 }
 
 func (c *Client) sendClientHello() {
-	c.wsClient.Send(c.makeClientHello())
+	c.wsClient.Send(c.makeClientHello(c.wsClient.CurrentStatus().Route))
 }
 
 func (c *Client) Start(ctx context.Context) {
@@ -147,6 +170,21 @@ func (c *Client) Start(ctx context.Context) {
 	go c.handleBridgeIncoming(ctx)
 	go c.syncLoop(ctx)
 	go c.timeSyncLoop(ctx)
+	c.sendUIState()
+}
+
+func (c *Client) SetServerStatus(serverListenError string) {
+	c.mu.Lock()
+	c.serverListenError = serverListenError
+	c.mu.Unlock()
+	c.sendUIState()
+}
+
+func (c *Client) SetTunnelStatus(tunnelConnected bool, tunnelError string) {
+	c.mu.Lock()
+	c.tunnelConnected = tunnelConnected
+	c.tunnelError = tunnelError
+	c.mu.Unlock()
 	c.sendUIState()
 }
 
@@ -184,12 +222,31 @@ func (c *Client) handleServerHello(msg *videowithyoupb.ServerHello) {
 	if msg == nil {
 		return
 	}
+	var cfgToSave *config.Config
 	c.mu.Lock()
 	c.clientID = msg.ClientId
+	if msg.SessionToken != "" && msg.SessionToken != c.cfg.Connection.SessionToken {
+		c.cfg.Connection.SessionToken = msg.SessionToken
+		copyCfg := c.cfg
+		cfgToSave = &copyCfg
+	}
+	if msg.Resumed {
+		c.pendingRoomAction = false
+		c.lastError = ""
+	}
 	c.mu.Unlock()
+	if cfgToSave != nil {
+		if err := config.SaveConfig(c.cfgPath, *cfgToSave); err != nil {
+			c.log.Printf("[配置] 保存会话令牌失败 error=%q", err)
+		}
+	}
 
-	c.log.Printf("server hello client_id=%s", msg.ClientId)
+	c.log.Printf("[网络] 服务端握手完成 client_id=%s resumed=%t", msg.ClientId, msg.Resumed)
 	go c.runInitialTimeSync()
+	if msg.Resumed {
+		c.sendUIState()
+		return
+	}
 
 	c.mu.Lock()
 	desiredRole := c.desiredRole
@@ -277,6 +334,21 @@ func (c *Client) handleRoomSnapshot(snapshot *videowithyoupb.RoomSnapshot) {
 	c.hostID = snapshot.HostId
 	c.membersCount = len(snapshot.Members)
 	c.hostDisplayName = findHostDisplayName(snapshot.HostId, snapshot.Members)
+	for _, member := range snapshot.Members {
+		if member.GetMemberId() != c.clientID {
+			continue
+		}
+		if member.GetIsHost() {
+			c.role = RoleHost
+			c.desiredRole = RoleHost
+			c.desiredRoom = ""
+		} else {
+			c.role = RoleFollower
+			c.desiredRole = RoleFollower
+			c.desiredRoom = snapshot.RoomCode
+		}
+		break
+	}
 	events := c.updateMembers(snapshot.Members)
 	if snapshot.LatestState != nil {
 		c.lastHostState = snapshot.LatestState
@@ -1055,17 +1127,27 @@ func (c *Client) sendUIState() {
 	c.mu.Lock()
 	events := append([]string(nil), c.roomEvents...)
 	state := UIState{
-		RoomCode:        c.roomCode,
-		Role:            string(c.role),
-		MembersCount:    c.membersCount,
-		Endpoint:        c.cfg.Endpoint,
-		FollowURL:       c.cfg.FollowURL,
-		LastError:       c.lastError,
-		DisplayName:     c.cfg.DisplayName,
-		HostDisplayName: c.hostDisplayName,
-		LastSyncTime:    formatSyncTime(c.lastSyncAt),
-		RoomEvents:      events,
-		ServerConnected: c.serverConnected,
+		RoomCode:          c.roomCode,
+		Role:              string(c.role),
+		MembersCount:      c.membersCount,
+		Endpoint:          c.cfg.Endpoint,
+		FollowURL:         c.cfg.FollowURL,
+		LastError:         c.lastError,
+		DisplayName:       c.cfg.DisplayName,
+		HostDisplayName:   c.hostDisplayName,
+		LastSyncTime:      formatSyncTime(c.lastSyncAt),
+		RoomEvents:        events,
+		ServerConnected:   c.serverConnected,
+		ConnectionRoute:   string(c.networkStatus.Route),
+		ConnectionStage:   c.networkStatus.Stage,
+		DirectError:       c.networkStatus.DirectError,
+		CloudError:        c.networkStatus.CloudError,
+		RemoteAddress:     c.networkStatus.RemoteAddress,
+		LatencyMS:         c.networkStatus.LatencyMS,
+		ServerRoleEnabled: c.serverRoleEnabled,
+		ServerListenError: c.serverListenError,
+		TunnelConnected:   c.tunnelConnected,
+		TunnelError:       c.tunnelError,
 	}
 	c.mu.Unlock()
 

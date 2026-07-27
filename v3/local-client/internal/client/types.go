@@ -11,17 +11,27 @@ const (
 )
 
 type UIState struct {
-	RoomCode        string   `json:"room_code"`
-	Role            string   `json:"role"`
-	MembersCount    int      `json:"members_count"`
-	Endpoint        string   `json:"endpoint"`
-	FollowURL       bool     `json:"follow_url"`
-	LastError       string   `json:"last_error"`
-	DisplayName     string   `json:"display_name"`
-	HostDisplayName string   `json:"host_display_name"`
-	LastSyncTime    string   `json:"last_sync_time"`
-	RoomEvents      []string `json:"room_events"`
-	ServerConnected bool     `json:"server_connected"`
+	RoomCode          string   `json:"room_code"`
+	Role              string   `json:"role"`
+	MembersCount      int      `json:"members_count"`
+	Endpoint          string   `json:"endpoint"`
+	FollowURL         bool     `json:"follow_url"`
+	LastError         string   `json:"last_error"`
+	DisplayName       string   `json:"display_name"`
+	HostDisplayName   string   `json:"host_display_name"`
+	LastSyncTime      string   `json:"last_sync_time"`
+	RoomEvents        []string `json:"room_events"`
+	ServerConnected   bool     `json:"server_connected"`
+	ConnectionRoute   string   `json:"connection_route"`
+	ConnectionStage   string   `json:"connection_stage"`
+	DirectError       string   `json:"direct_error"`
+	CloudError        string   `json:"cloud_error"`
+	RemoteAddress     string   `json:"remote_address"`
+	LatencyMS         int64    `json:"latency_ms"`
+	ServerRoleEnabled bool     `json:"server_role_enabled"`
+	ServerListenError string   `json:"server_listen_error"`
+	TunnelConnected   bool     `json:"tunnel_connected"`
+	TunnelError       string   `json:"tunnel_error"`
 }
 
 type UIAction struct {

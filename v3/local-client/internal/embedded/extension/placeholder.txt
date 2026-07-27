@@ -1,0 +1,1 @@
+Run scripts/build.ps1 to replace this placeholder with the built browser extension.

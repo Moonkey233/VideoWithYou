@@ -1,4 +1,6 @@
 ﻿const DEFAULT_CLIENT_HOST = "127.0.0.1";
+export {};
+
 const DEFAULT_CLIENT_PORT = 23333;
 const DEFAULT_CLIENT_PATH = "/ext";
 
@@ -146,7 +148,12 @@ function ensureFollowerTabReady() {
   }
   if (typeof followerTabId === "number") {
     chrome.tabs.get(followerTabId, (tab) => {
-      if (chrome.runtime.lastError || !tab || !isTrackableUrl(tab.url)) {
+      if (
+        chrome.runtime.lastError ||
+        !tab ||
+        typeof tab.id !== "number" ||
+        !isTrackableUrl(tab.url)
+      ) {
         followerTabId = null;
         selectFollowerTabFromActive();
         return;
