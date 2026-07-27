@@ -17,6 +17,7 @@ import (
 
 	"videowithyou/v3/internal/hostserver"
 	"videowithyou/v3/internal/install"
+	"videowithyou/v3/internal/localcert"
 	"videowithyou/v3/internal/logging"
 	"videowithyou/v3/internal/roomserver"
 	"videowithyou/v3/internal/sshtunnel"
@@ -26,7 +27,7 @@ import (
 	"videowithyou/v3/local-client/internal/extws"
 )
 
-const version = "3.0.0"
+const version = "3.0.1"
 
 func main() {
 	if err := run(); err != nil {
@@ -80,6 +81,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	ownerProfilePath := filepath.Join(runtimeDir, "VideoWithYou-client.vwyprofile")
 
 	if strings.TrimSpace(*importProfile) != "" {
 		profile, err := config.LoadProfile(*importProfile)
@@ -99,6 +101,35 @@ func run() error {
 		if err := cfg.EnableOwnerMode(runtimeDir); err != nil {
 			return err
 		}
+	}
+	if cfg.Server.Enabled {
+		wasACME := strings.EqualFold(strings.TrimSpace(cfg.Server.TLS.Mode), "acme")
+		previousCAFile := cfg.Server.TLS.CAFile
+		result, err := ensureOwnerTLS(&cfg, runtimeDir)
+		if err != nil {
+			return fmt.Errorf("准备本地 TLS 证书失败: %w", err)
+		}
+		if wasACME {
+			logger.Printf("[证书] 已从公网 ACME 迁移为本地 CA，不再需要 TCP 80")
+		}
+		if previousCAFile != "" && !strings.EqualFold(previousCAFile, result.CAFile) {
+			logger.Printf("[证书] 旧证书算法兼容性不足，已保留旧文件并迁移到 ECDSA P-256")
+		}
+		logger.Printf("[证书] 本地 CA 已就绪 domain=%s expires=%s renewed=%t", cfg.Server.TLS.Domain, result.NotAfter.Format(time.RFC3339), result.Renewed)
+		if err := config.SaveConfig(*configPath, cfg); err != nil {
+			return err
+		}
+		if err := config.SaveProfile(ownerProfilePath, cfg.ClientProfile()); err != nil {
+			if *initOwner {
+				return err
+			}
+			logger.Printf("[配置] 自动更新客户端 profile 失败 path=%s error=%q", ownerProfilePath, err)
+		} else {
+			logger.Printf("[配置] 客户端 profile 已更新 path=%s version=%d", ownerProfilePath, config.ProfileVersion)
+		}
+	}
+
+	if *initOwner {
 		publicKey, err := sshtunnel.EnsurePrivateKey(cfg.Relay.PrivateKeyPath)
 		if err != nil {
 			return fmt.Errorf("生成 SSH 隧道密钥失败: %w", err)
@@ -109,12 +140,8 @@ func run() error {
 		if err := config.SaveConfig(*configPath, cfg); err != nil {
 			return err
 		}
-		profilePath := filepath.Join(runtimeDir, "VideoWithYou-client.vwyprofile")
-		if err := config.SaveProfile(profilePath, cfg.ClientProfile()); err != nil {
-			return err
-		}
-		fmt.Printf("\n服务端模式已初始化。\n客户端配置: %s\nSSH 公钥（需要加入云服务器专用用户的 authorized_keys）:\n%s\n\n", profilePath, publicKey)
-		logger.Printf("[配置] 混合服务端模式已初始化 profile=%s", profilePath)
+		fmt.Printf("\n服务端模式已初始化。\n客户端配置: %s\nSSH 公钥（需要加入云服务器专用用户的 authorized_keys）:\n%s\n\n", ownerProfilePath, publicKey)
+		logger.Printf("[配置] 混合服务端模式已初始化 profile=%s", ownerProfilePath)
 	}
 
 	if strings.TrimSpace(*exportProfile) != "" {
@@ -159,6 +186,9 @@ func run() error {
 func runApplication(cfg config.Config, configPath string, logger *log.Logger) error {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
+	if cfg.Server.Enabled && strings.EqualFold(strings.TrimSpace(cfg.Server.TLS.Mode), "local_ca") {
+		go renewOwnerTLS(ctx, cfg, logger)
+	}
 
 	var hosted *hostserver.Server
 	serverStartError := ""
@@ -240,6 +270,74 @@ func runApplication(cfg config.Config, configPath string, logger *log.Logger) er
 		_ = hosted.Shutdown(shutdownCtx)
 	}
 	return nil
+}
+
+func ensureOwnerTLS(cfg *config.Config, runtimeDir string) (localcert.Result, error) {
+	certDir := strings.TrimSpace(cfg.Server.TLS.CacheDir)
+	if certDir == "" {
+		certDir = filepath.Join(runtimeDir, "certs")
+	}
+	result, err := localcert.Ensure(localcert.Config{
+		Domain:    cfg.Server.TLS.Domain,
+		Directory: certDir,
+		CAFile:    cfg.Server.TLS.CAFile,
+		CAKeyFile: cfg.Server.TLS.CAKeyFile,
+		CertFile:  cfg.Server.TLS.CertFile,
+		KeyFile:   cfg.Server.TLS.KeyFile,
+	})
+	if errors.Is(err, localcert.ErrUnsupportedCAAlgorithm) {
+		cfg.Server.TLS.CAFile = filepath.Join(certDir, "owner-ca-ecdsa.pem")
+		cfg.Server.TLS.CAKeyFile = filepath.Join(certDir, "owner-ca-ecdsa-key.pem")
+		cfg.Server.TLS.CertFile = filepath.Join(certDir, "server-ecdsa.pem")
+		cfg.Server.TLS.KeyFile = filepath.Join(certDir, "server-ecdsa-key.pem")
+		result, err = localcert.Ensure(localcert.Config{
+			Domain:    cfg.Server.TLS.Domain,
+			Directory: certDir,
+			CAFile:    cfg.Server.TLS.CAFile,
+			CAKeyFile: cfg.Server.TLS.CAKeyFile,
+			CertFile:  cfg.Server.TLS.CertFile,
+			KeyFile:   cfg.Server.TLS.KeyFile,
+		})
+	}
+	if err != nil {
+		return localcert.Result{}, err
+	}
+	cfg.Server.TLS.Mode = "local_ca"
+	cfg.Server.TLS.CacheDir = certDir
+	cfg.Server.TLS.HTTPAddress = ""
+	cfg.Server.TLS.CAFile = result.CAFile
+	cfg.Server.TLS.CAKeyFile = result.CAKeyFile
+	cfg.Server.TLS.CertFile = result.CertFile
+	cfg.Server.TLS.KeyFile = result.KeyFile
+	cfg.Connection.TLSCAPEM = result.CAPEM
+	return result, nil
+}
+
+func renewOwnerTLS(ctx context.Context, cfg config.Config, logger *log.Logger) {
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			result, err := localcert.Ensure(localcert.Config{
+				Domain:    cfg.Server.TLS.Domain,
+				Directory: cfg.Server.TLS.CacheDir,
+				CAFile:    cfg.Server.TLS.CAFile,
+				CAKeyFile: cfg.Server.TLS.CAKeyFile,
+				CertFile:  cfg.Server.TLS.CertFile,
+				KeyFile:   cfg.Server.TLS.KeyFile,
+			})
+			if err != nil {
+				logger.Printf("[证书] 本地证书续期检查失败 error=%q", err)
+				continue
+			}
+			if result.Renewed {
+				logger.Printf("[证书] 本地服务端证书已自动续期 expires=%s", result.NotAfter.Format(time.RFC3339))
+			}
+		}
+	}
 }
 
 func loadConfigResilient(path string, logger *log.Logger) (config.Config, error) {

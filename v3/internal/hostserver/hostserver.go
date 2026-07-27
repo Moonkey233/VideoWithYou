@@ -175,10 +175,22 @@ func (s *Server) prepareTLS() (*tls.Config, *http.Server, net.Listener, error) {
 	case "disabled":
 		s.log.Printf("[证书] TLS 已禁用，仅允许用于本地开发")
 		return nil, nil, nil, nil
-	case "files":
+	case "files", "local_ca":
 		certificate, err := tls.LoadX509KeyPair(s.cfg.TLS.CertFile, s.cfg.TLS.KeyFile)
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("load TLS certificate: %w", err)
+		}
+		if s.tlsMode() == "local_ca" {
+			return &tls.Config{
+				MinVersion: tls.VersionTLS12,
+				GetCertificate: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+					renewed, err := tls.LoadX509KeyPair(s.cfg.TLS.CertFile, s.cfg.TLS.KeyFile)
+					if err != nil {
+						return nil, err
+					}
+					return &renewed, nil
+				},
+			}, nil, nil, nil
 		}
 		return &tls.Config{
 			MinVersion:   tls.VersionTLS12,

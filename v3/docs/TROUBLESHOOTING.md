@@ -38,32 +38,31 @@ Test-NetConnection moonkey.top -Port 21314
 
 程序不会退出，会持续按“IPv6 → IPv4 云转发”的顺序重试。
 
-## 证书签发或续期失败
+## 本地 CA 或证书错误
 
-检查：
-
-```powershell
-Resolve-DnsName ipv6.moonkey.top -Type AAAA
-Test-NetConnection ipv6.moonkey.top -Port 80
-```
-
-注意：同一局域网内测试公网 IPv6 的结果可能受路由器策略影响，最好使用手机
-热点或另一条外网验证。
-
-必须满足：
-
-- DDNS AAAA 指向服主当前 IPv6
-- Windows EXE 正在运行
-- Windows 和路由器允许 IPv6 TCP 80
-- 系统时间正确
-
-证书缓存：
+v3.0.1 不再连接外部 ACME，也不需要 TCP 80。服主证书目录：
 
 ```text
 %LOCALAPPDATA%\VideoWithYou\certs
 ```
 
-不要频繁删除缓存，否则可能触发 CA 申请频率限制。
+正常应包含：
+
+```text
+owner-ca.pem
+owner-ca-key.pem
+server.pem
+server-key.pem
+```
+
+从早期测试包迁移后，文件名可能带 `-ecdsa`；以 `config.json` 的
+`server.tls` 路径为准。旧文件会保留，不参与当前运行。
+
+如果朋友端显示 `unknown authority`、`tls_certificate` 或“缺少服主 CA”，通常
+是导入了 v3.0.0 的旧 profile。服主使用 v3.0.1 重新导出，朋友重新导入。
+
+不要把 `owner-ca-key.pem` 发给任何人，也不要只删除其中一个 CA 文件。CA
+证书和私钥不完整时程序会拒绝生成新身份，避免现有朋友遭遇静默信任变更。
 
 ## 云隧道报 access denied
 
@@ -77,7 +76,7 @@ Test-NetConnection ipv6.moonkey.top -Port 80
 
 ## 客户端报 access denied
 
-朋友导入了错误或过期的 `.vwyprofile`。服主重新导出：
+朋友导入了错误、过期或 v3.0.0 的 `.vwyprofile`。服主重新导出：
 
 ```powershell
 VideoWithYou.exe --export-profile .\VideoWithYou-client.vwyprofile

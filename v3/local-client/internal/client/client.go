@@ -101,6 +101,7 @@ func New(cfg config.Config, cfgPath string, host bridge.Host, logger *log.Logger
 		wsClient: ws.NewClient(ws.Config{
 			URL:              cfg.Connection.DirectURL,
 			CloudDialAddress: cfg.Connection.CloudDialAddress,
+			RootCAPEM:        cfg.Connection.TLSCAPEM,
 			PreferLocal:      cfg.Server.Enabled,
 			DirectTimeout:    time.Duration(cfg.Connection.DirectTimeoutMS) * time.Millisecond,
 			CloudTimeout:     time.Duration(cfg.Connection.CloudTimeoutMS) * time.Millisecond,

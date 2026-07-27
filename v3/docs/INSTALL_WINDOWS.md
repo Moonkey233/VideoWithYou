@@ -34,6 +34,7 @@ WSS 证书无关，不会要求朋友周期性重新安装。
 
 - 启用 Windows 内嵌房间服务
 - 生成客户端访问令牌
+- 生成服主专属 ECDSA P-256 本地 CA 和 WSS 服务端证书
 - 生成 SSH Ed25519 隧道密钥
 - 生成客户端配置 `VideoWithYou-client.vwyprofile`
 - 释放浏览器扩展
@@ -57,11 +58,11 @@ New-NetFirewallRule `
   -Direction Inbound `
   -Action Allow `
   -Protocol TCP `
-  -LocalPort 80,21314
+  -LocalPort 21314
 ```
 
-如果光猫或路由器还有“IPv6 防火墙/入站规则”，也允许本机的 TCP 80 和
-21314。IPv6 不需要传统 IPv4 端口转发。
+如果光猫或路由器还有“IPv6 防火墙/入站规则”，也允许本机 TCP 21314。
+IPv6 不需要传统 IPv4 端口转发。程序不再需要公网 TCP 80 或 443。
 
 确认 DDNS：
 
@@ -89,7 +90,8 @@ Resolve-DnsName ipv6.moonkey.top -Type AAAA
 [网络] 已连接 route=local
 ```
 
-首次签发证书可能需要几秒钟。以后由程序自动续期。
+本地 CA 和服务端证书在初始化时立即生成，不访问外部证书机构。服务端证书
+临近到期时由程序使用同一个本地 CA 自动续期。
 
 ## 二、朋友电脑
 
@@ -109,6 +111,8 @@ Resolve-DnsName ipv6.moonkey.top -Type AAAA
 ```
 
 每台朋友电脑会生成自己的会话身份。导入不会启用服务端或 SSH 隧道。
+profile 内包含服主 CA 的公开证书，用于验证 WSS；不会安装到 Windows 系统
+证书库，也不包含 CA 私钥。
 
 ### 3. 启动
 
@@ -166,3 +170,25 @@ VideoWithYou.exe --extract-extension
 - `两条线路均失败，等待重试`
 
 切换线路时服务端保留会话 30 秒，正常情况下房间号和角色不会丢失。
+
+## 五、从 v3.0.0 升级
+
+先退出旧进程，再用 v3.0.1 发布文件执行：
+
+```powershell
+.\VideoWithYou-v3-windows-amd64.exe --install
+```
+
+程序会自动把现有服主配置从 ACME 迁移到本地 CA，并更新：
+
+```text
+%LOCALAPPDATA%\VideoWithYou\VideoWithYou-client.vwyprofile
+```
+
+服主不需要重新执行 `--init-owner`，云端 SSH 公钥和 access token 不变。由于
+profile 格式从 v1 升级为 v2，朋友必须重新导入这份更新后的 profile：
+
+```powershell
+& "$env:LOCALAPPDATA\Programs\VideoWithYou\VideoWithYou.exe" `
+  --import-profile ".\VideoWithYou-client.vwyprofile"
+```

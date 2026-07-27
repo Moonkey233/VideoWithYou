@@ -38,6 +38,7 @@ const (
 type Config struct {
 	URL              string
 	CloudDialAddress string
+	RootCAPEM        string
 	PreferLocal      bool
 	DirectTimeout    time.Duration
 	CloudTimeout     time.Duration
@@ -308,16 +309,11 @@ func (c *Client) routeAttempts() ([]routeAttempt, error) {
 		if err != nil {
 			return nil, err
 		}
-		localTimeout := c.cfg.DirectTimeout
-		if localTimeout < 15*time.Second {
-			// The first local TLS handshake can trigger ACME issuance.
-			localTimeout = 15 * time.Second
-		}
 		attempts = append(attempts, routeAttempt{
 			route:       RouteLocal,
 			network:     "tcp6",
 			dialAddress: net.JoinHostPort("::1", port),
-			timeout:     localTimeout,
+			timeout:     c.cfg.DirectTimeout,
 		})
 	}
 	attempts = append(attempts, routeAttempt{
@@ -346,12 +342,25 @@ func (c *Client) dial(parent context.Context, attempt routeAttempt) (*websocket.
 	ctx, cancel := context.WithTimeout(parent, attempt.timeout)
 	defer cancel()
 
+	parsedURL, err := url.Parse(c.cfg.URL)
+	if err != nil {
+		return nil, &dialFailure{stage: "configuration_error", err: err}
+	}
+	tlsConfig := &tls.Config{
+		MinVersion: tls.VersionTLS12,
+		ServerName: parsedURL.Hostname(),
+	}
+	if strings.TrimSpace(c.cfg.RootCAPEM) != "" {
+		roots := x509.NewCertPool()
+		if !roots.AppendCertsFromPEM([]byte(c.cfg.RootCAPEM)) {
+			return nil, &dialFailure{stage: "tls_ca", err: errors.New("invalid owner CA certificate")}
+		}
+		tlsConfig.RootCAs = roots
+	}
 	netDialer := &net.Dialer{Timeout: attempt.timeout, KeepAlive: 30 * time.Second}
 	dialer := websocket.Dialer{
 		HandshakeTimeout: attempt.timeout,
-		TLSClientConfig: &tls.Config{
-			MinVersion: tls.VersionTLS12,
-		},
+		TLSClientConfig:  tlsConfig,
 		NetDialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 			return netDialer.DialContext(ctx, attempt.network, attempt.dialAddress)
 		},

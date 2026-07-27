@@ -8,7 +8,7 @@ VideoWithYou v3 是一个多人同步看视频工具。Windows 端只有一个�
 - Windows 房间服务端（仅服主配置启用）
 - IPv6 公网直连入口
 - 到 Linux 云服务器的 SSH IPv4 反向转发
-- 自动 TLS 证书签发、续期、日志和故障回退
+- 自动本地 TLS 证书、续期、日志和故障回退
 
 ## 连接架构
 
@@ -29,7 +29,6 @@ IPv6 直连和 IPv4 云转发最终进入同一个房间服务，因此不会出
 |---|---:|---|
 | Windows 本机 | TCP 23333 | 浏览器扩展连接本地 EXE，仅监听 127.0.0.1 |
 | Windows 公网 IPv6 | TCP 21314 | WSS 视频同步服务 |
-| Windows 公网 IPv6 | TCP 80 | ACME 自动签发和续期 |
 | Linux 云公网 IPv4 | TCP 21314 | IPv4 回退入口，经 SSH 转发回 Windows |
 | Linux 云服务器 | TCP 22 | Windows 建立 SSH 反向隧道 |
 
@@ -73,16 +72,21 @@ VideoWithYou.exe --export-profile .\VideoWithYou-client.vwyprofile
 
 ## 证书
 
-公网线路默认使用 WSS。证书通过 Go `autocert` 自动申请、缓存和续期。朋友端
-不安装证书，也不需要按证书周期重新导入配置。服主只需长期保持：
+公网线路默认使用 WSS。服主初始化时生成专属 ECDSA P-256 本地 CA，由它自动签发服务端
+证书；朋友 profile 内只包含公开 CA 证书，EXE 用它验证服主身份。朋友无需
+安装系统证书，也不需要按证书周期重新导入配置。服主只需长期保持：
 
 - `ipv6.moonkey.top` 的 AAAA 指向当前 Windows 公网 IPv6
-- IPv6 TCP 80 和 21314 能从公网访问
+- IPv6 TCP 21314 能从公网访问
+
+本地 CA 私钥只保存在服主 `%LOCALAPPDATA%\VideoWithYou\certs`。公网不再
+需要 TCP 80、443 或外部 ACME 证书机构。
 
 ## 源码结构
 
 - `internal/roomserver`：共享房间服务与断线恢复
-- `internal/hostserver`：Windows IPv6/WSS 和 ACME
+- `internal/hostserver`：Windows IPv6/WSS
+- `internal/localcert`：服主本地 CA、证书签发与续期
 - `internal/sshtunnel`：内嵌 SSH 反向转发
 - `local-client`：同步客户端、本地浏览器桥、Browser/MPC-BE 适配
 - `extension`：Chrome/Edge Manifest V3 扩展

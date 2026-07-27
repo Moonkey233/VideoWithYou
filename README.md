@@ -11,7 +11,7 @@
 - `ipv6.moonkey.top:21314` IPv6 直连优先
 - 直连失败自动使用 `moonkey.top:21314` IPv4 云转发
 - 两条路径进入同一个 Windows 房间服务
-- 自动 WSS 证书、SSH 反向隧道、断线恢复和线路 UI
+- profile 固定信任的本地 CA、SSH 反向隧道、断线恢复和线路 UI
 - EXE 内嵌并自动释放 Edge/Chrome 扩展
 
 安装请从 [v3 Windows 安装说明](v3/docs/INSTALL_WINDOWS.md) 开始。

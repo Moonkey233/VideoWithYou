@@ -3,6 +3,7 @@
   "connection": {
     "direct_url": "wss://ipv6.moonkey.top:21314/ws",
     "cloud_dial_address": "moonkey.top:21314",
+    "tls_ca_pem": "",
     "direct_timeout_ms": 3000,
     "cloud_timeout_ms": 5000,
     "retry_delay_ms": 2000,
@@ -18,11 +19,13 @@
     "reconnect_grace_sec": 30,
     "host_idle_timeout_sec": 600,
     "tls": {
-      "mode": "acme",
+      "mode": "local_ca",
       "domain": "ipv6.moonkey.top",
       "email": "",
       "cache_dir": "",
-      "http_address": "[::]:80",
+      "http_address": "",
+      "ca_file": "",
+      "ca_key_file": "",
       "cert_file": "",
       "key_file": ""
     }

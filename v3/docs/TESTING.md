@@ -6,7 +6,7 @@
 
 ```powershell
 go test ./...
-go test -race ./internal/roomserver ./internal/hostserver ./internal/sshtunnel ./local-client/internal/ws
+go test -race ./internal/roomserver ./internal/hostserver ./internal/localcert ./internal/sshtunnel ./local-client/internal/ws
 go vet ./...
 
 cd extension
@@ -25,6 +25,9 @@ npm run build
 - 云线路连接成功后仍保留 IPv6 失败原因
 - SSH Ed25519 密钥生成与稳定加载
 - SSH 主机密钥首次信任和变化拒绝
+- 本地 CA 稳定生成、域名验证和服务端证书续期判断
+- profile 携带公开 CA 且不携带 CA 私钥
+- IPv4 云回退使用 profile CA 完成 WSS 验证
 - 同一房间 HTTP 服务接受额外转发 Listener
 - 配置生成、21314 默认端口、服主/朋友 profile 隔离
 - 扩展 TypeScript 严格类型检查和生产构建
@@ -39,7 +42,7 @@ npm run build
 | 线路中断恢复 | 房间内中断当前线路后恢复另一条 | 30 秒内房间号和角色不变 |
 | 云端不可用 | 暂停 SSH 隧道但保留 IPv6 | IPv6 用户继续正常使用 |
 | 双线路不可用 | 同时阻断直连和云端 | EXE 不退出，UI 显示两个原因并重试 |
-| 证书首次签发 | 清洁测试环境首次启动服主 | TCP 80 验证后 WSS 可用 |
+| 本地证书首次生成 | 清洁测试环境首次启动服主 | 无外网和 TCP 80 依赖，WSS 可用 |
 | 浏览器桥异常 | 占用本机 23333 | EXE 保持运行并写明端口错误 |
 | 配置损坏 | 使用无效 JSON 启动 | 备份 `.bad-时间`，使用安全默认配置 |
 
@@ -56,7 +59,7 @@ npm run build
 以下检查已通过：
 
 - `go test ./...`
-- `go test -race ./internal/roomserver ./internal/hostserver ./internal/sshtunnel ./local-client/internal/ws ./local-client/internal/embedded`
+- `go test -race ./...`
 - `go vet ./...`
 - `npm audit --audit-level=high`：0 个已知漏洞
 - `npm run typecheck`
@@ -65,13 +68,17 @@ npm run build
 - 隔离目录中的服主初始化、朋友配置导入、自安装和内嵌扩展释放
 - 本机真实 WebSocket 的本机线路与 IPv6 失败后 IPv4 云回退
 - 360 像素宽度下的本机、云回退和双线路失败扩展 UI
+- 真实 Windows 本机 `route=local` 和 ECDSA P-256 TLS
+- `ipv6.moonkey.top:21314` 的 IPv6 TCP/TLS
+- `moonkey.top:21314` 经 SSH 反向转发的 IPv4 TCP/TLS
+- v2 `.vwyprofile` 隔离导入
 
 发布文件：
 
 ```text
 VideoWithYou-v3-windows-amd64.exe
-SHA256 3898979344d1badb1582fb9106a81246c27cd8a52da7ce216f62bc2febf5ce91
+SHA256 e40c5187a1d89c0c1bcb7311dcd5a14d5c7ed6051bae0663c9a5de8720142409
 ```
 
-尚未在这次本地构建中改动真实 Windows 防火墙、云服务器 `sshd` 或公网 DNS，
-因此首次 ACME 签发和公网端到端连通性需按安装文档在正式环境完成最后验收。
+公网验证使用现有 Windows 防火墙、DDNS、云服务器 `sshd` 与安全组；未修改
+这些基础设施配置。

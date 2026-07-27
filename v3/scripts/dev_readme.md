@@ -34,7 +34,8 @@ cd v3
 go run ./server/cmd/server -addr :21314
 ```
 
-它默认是明文 WS。正式公网部署使用统一 Windows EXE 的 WSS/ACME 服务。
+它默认是明文 WS。正式公网部署使用统一 Windows EXE 和 profile 固定信任的
+本地 CA WSS 服务。
 
 ## 本地无 TLS 调试
 

@@ -2,6 +2,7 @@ package ws
 
 import (
 	"context"
+	"crypto/tls"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,7 @@ import (
 	"github.com/gorilla/websocket"
 	"google.golang.org/protobuf/proto"
 
+	"videowithyou/v3/internal/localcert"
 	videowithyoupb "videowithyou/v3/proto/gen"
 )
 
@@ -94,5 +96,87 @@ func TestClassifiesIPv6DNSFailure(t *testing.T) {
 	err := &net.DNSError{Err: "no such host", Name: "example.invalid"}
 	if stage := classifyDialFailure(err, nil); stage != "dns" {
 		t.Fatalf("unexpected stage %q", stage)
+	}
+}
+
+func TestCloudFallbackTrustsProfileLocalCA(t *testing.T) {
+	certificate, err := localcert.Ensure(localcert.Config{
+		Domain:    "owner.invalid",
+		Directory: t.TempDir(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pair, err := tls.LoadX509KeyPair(certificate.CertFile, certificate.KeyFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	upgrader := websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, upgradeErr := upgrader.Upgrade(w, r, nil)
+		if upgradeErr != nil {
+			return
+		}
+		defer conn.Close()
+		_, _, _ = conn.ReadMessage()
+		data, _ := proto.Marshal(&videowithyoupb.Envelope{
+			Payload: &videowithyoupb.Envelope_ServerHello{
+				ServerHello: &videowithyoupb.ServerHello{ClientId: "local-ca"},
+			},
+		})
+		_ = conn.WriteMessage(websocket.BinaryMessage, data)
+		<-r.Context().Done()
+	}))
+	server.TLS = &tls.Config{
+		MinVersion:   tls.VersionTLS12,
+		Certificates: []tls.Certificate{pair},
+	}
+	server.StartTLS()
+	defer server.Close()
+
+	parsed, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, port, err := net.SplitHostPort(parsed.Host)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := NewClient(Config{
+		URL:              "wss://owner.invalid:" + port,
+		CloudDialAddress: parsed.Host,
+		RootCAPEM:        certificate.CAPEM,
+		DirectTimeout:    100 * time.Millisecond,
+		CloudTimeout:     time.Second,
+		RetryDelay:       50 * time.Millisecond,
+	}, nil)
+	client.SetOnConnect(func(conn *websocket.Conn, _ Route) error {
+		return conn.WriteMessage(websocket.BinaryMessage, []byte("hello"))
+	})
+	statuses := make(chan Status, 16)
+	client.SetOnStatus(func(status Status) {
+		select {
+		case statuses <- status:
+		default:
+		}
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go client.Start(ctx)
+	deadline := time.After(4 * time.Second)
+	for {
+		select {
+		case status := <-statuses:
+			if status.Connected {
+				if status.Route != RouteCloudIPv4 {
+					t.Fatalf("connected through unexpected route %q", status.Route)
+				}
+				return
+			}
+		case <-deadline:
+			t.Fatal("client did not connect with profile local CA")
+		}
 	}
 }

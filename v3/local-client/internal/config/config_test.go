@@ -20,6 +20,9 @@ func TestDefaultPublicPortAndRoutes(t *testing.T) {
 	if cfg.Relay.RemoteListenAddress != "0.0.0.0:21314" {
 		t.Fatalf("unexpected relay listen address: %s", cfg.Relay.RemoteListenAddress)
 	}
+	if cfg.Server.TLS.Mode != "local_ca" {
+		t.Fatalf("unexpected default TLS mode: %s", cfg.Server.TLS.Mode)
+	}
 }
 
 func TestOwnerProfileDoesNotExportPrivateState(t *testing.T) {
@@ -28,9 +31,13 @@ func TestOwnerProfileDoesNotExportPrivateState(t *testing.T) {
 	if err := cfg.EnableOwnerMode(runtimeDir); err != nil {
 		t.Fatal(err)
 	}
+	cfg.Connection.TLSCAPEM = "test owner CA"
 	profile := cfg.ClientProfile()
 	if profile.AccessToken == "" {
 		t.Fatal("owner profile is missing access token")
+	}
+	if profile.TLSCAPEM == "" || profile.Version != ProfileVersion {
+		t.Fatal("owner profile is missing local CA trust")
 	}
 
 	friend := DefaultConfig()
@@ -42,6 +49,9 @@ func TestOwnerProfileDoesNotExportPrivateState(t *testing.T) {
 	}
 	if friend.Connection.SessionToken == cfg.Connection.SessionToken {
 		t.Fatal("client profile reused the owner's session token")
+	}
+	if friend.Connection.TLSCAPEM != profile.TLSCAPEM {
+		t.Fatal("client profile did not import local CA trust")
 	}
 }
 

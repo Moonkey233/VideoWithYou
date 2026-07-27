@@ -44,7 +44,8 @@ sudo bash setup-cloud-relay.sh ./id_ed25519.pub
 入方向 TCP 21314，来源 0.0.0.0/0
 ```
 
-不需要在云端开放 TCP 80。证书验证发生在 Windows 的 IPv6 TCP 80。
+不需要在云端或 Windows 开放 TCP 80。WSS 由服主本地 CA 签发，云端只转发
+已经加密的原始连接。
 
 ## 验证
 

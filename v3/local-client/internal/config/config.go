@@ -13,7 +13,7 @@ import (
 
 const (
 	DefaultPublicPort = 21314
-	ProfileVersion    = 1
+	ProfileVersion    = 2
 )
 
 type MPCCommands struct {
@@ -38,6 +38,7 @@ type MPCConfig struct {
 type ConnectionConfig struct {
 	DirectURL        string `json:"direct_url"`
 	CloudDialAddress string `json:"cloud_dial_address"`
+	TLSCAPEM         string `json:"tls_ca_pem,omitempty"`
 	DirectTimeoutMS  int64  `json:"direct_timeout_ms"`
 	CloudTimeoutMS   int64  `json:"cloud_timeout_ms"`
 	RetryDelayMS     int64  `json:"retry_delay_ms"`
@@ -52,6 +53,8 @@ type TLSConfig struct {
 	Email       string `json:"email"`
 	CacheDir    string `json:"cache_dir"`
 	HTTPAddress string `json:"http_address"`
+	CAFile      string `json:"ca_file,omitempty"`
+	CAKeyFile   string `json:"ca_key_file,omitempty"`
 	CertFile    string `json:"cert_file"`
 	KeyFile     string `json:"key_file"`
 }
@@ -107,6 +110,7 @@ type ClientProfile struct {
 	DirectURL        string `json:"direct_url"`
 	CloudDialAddress string `json:"cloud_dial_address"`
 	AccessToken      string `json:"access_token"`
+	TLSCAPEM         string `json:"tls_ca_pem"`
 }
 
 func DefaultConfig() Config {
@@ -127,9 +131,8 @@ func DefaultConfig() Config {
 			ReconnectGraceSec:  30,
 			HostIdleTimeoutSec: 600,
 			TLS: TLSConfig{
-				Mode:        "acme",
-				Domain:      "ipv6.moonkey.top",
-				HTTPAddress: "[::]:80",
+				Mode:   "local_ca",
+				Domain: "ipv6.moonkey.top",
 			},
 		},
 		Relay: RelayConfig{
@@ -334,6 +337,18 @@ func (cfg *Config) EnableOwnerMode(runtimeDir string) error {
 	if cfg.Server.TLS.CacheDir == "" {
 		cfg.Server.TLS.CacheDir = filepath.Join(runtimeDir, "certs")
 	}
+	if cfg.Server.TLS.CAFile == "" {
+		cfg.Server.TLS.CAFile = filepath.Join(cfg.Server.TLS.CacheDir, "owner-ca.pem")
+	}
+	if cfg.Server.TLS.CAKeyFile == "" {
+		cfg.Server.TLS.CAKeyFile = filepath.Join(cfg.Server.TLS.CacheDir, "owner-ca-key.pem")
+	}
+	if cfg.Server.TLS.CertFile == "" {
+		cfg.Server.TLS.CertFile = filepath.Join(cfg.Server.TLS.CacheDir, "server.pem")
+	}
+	if cfg.Server.TLS.KeyFile == "" {
+		cfg.Server.TLS.KeyFile = filepath.Join(cfg.Server.TLS.CacheDir, "server-key.pem")
+	}
 	return nil
 }
 
@@ -343,6 +358,7 @@ func (cfg Config) ClientProfile() ClientProfile {
 		DirectURL:        cfg.Connection.DirectURL,
 		CloudDialAddress: cfg.Connection.CloudDialAddress,
 		AccessToken:      cfg.Server.AccessToken,
+		TLSCAPEM:         cfg.Connection.TLSCAPEM,
 	}
 }
 
@@ -353,9 +369,13 @@ func (cfg *Config) ApplyProfile(profile ClientProfile) error {
 	if strings.TrimSpace(profile.DirectURL) == "" || strings.TrimSpace(profile.CloudDialAddress) == "" {
 		return errors.New("profile is missing connection endpoints")
 	}
+	if strings.TrimSpace(profile.TLSCAPEM) == "" {
+		return errors.New("profile is missing the owner CA certificate")
+	}
 	cfg.Connection.DirectURL = profile.DirectURL
 	cfg.Connection.CloudDialAddress = profile.CloudDialAddress
 	cfg.Connection.AccessToken = profile.AccessToken
+	cfg.Connection.TLSCAPEM = profile.TLSCAPEM
 	cfg.Server.Enabled = false
 	cfg.Relay.Enabled = false
 	cfg.Server.AccessToken = ""
