@@ -812,6 +812,7 @@ func (c *Client) handleTick() {
 	prevInactiveAt := c.endpointInactiveAt
 	reportedSet := c.reportedEndpointSet
 	reportedActive := c.reportedEndpointActive
+	serverConnected := c.serverConnected
 	c.mu.Unlock()
 
 	active := isEndpointActive(now, endpoint, adapter, lastExtSeen, extIdleTimeoutSec)
@@ -837,7 +838,7 @@ func (c *Client) handleTick() {
 	}
 	c.mu.Unlock()
 
-	if reportStatus && role == RoleFollower && roomID != "" {
+	if serverConnected && reportStatus && role == RoleFollower && roomID != "" {
 		c.sendMemberStatus(roomID, active)
 	}
 
@@ -851,7 +852,7 @@ func (c *Client) handleTick() {
 		return
 	}
 
-	if role == RoleHost {
+	if role == RoleHost && serverConnected {
 		c.sendHostState(roomID, offsetMs)
 		return
 	}
@@ -1092,6 +1093,12 @@ func (c *Client) runInitialTimeSync() {
 }
 
 func (c *Client) runSingleTimeSync() {
+	c.mu.Lock()
+	connected := c.serverConnected
+	c.mu.Unlock()
+	if !connected {
+		return
+	}
 	sample, ok := c.requestTimeSync()
 	if !ok {
 		return

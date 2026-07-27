@@ -1,9 +1,19 @@
 package sshtunnel
 
 import (
+	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"io"
+	"net"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
+	"time"
+
+	"golang.org/x/crypto/ssh"
 )
 
 func TestEnsurePrivateKeyIsStable(t *testing.T) {
@@ -34,5 +44,218 @@ func TestHostKeyTrustOnFirstUse(t *testing.T) {
 	}
 	if err := verifyOrTrustHostKey(path, "SHA256:changed"); err == nil {
 		t.Fatal("changed host key was accepted")
+	}
+}
+
+func TestSSHRemoteForwardEndToEnd(t *testing.T) {
+	testDir := t.TempDir()
+	privateKeyPath := filepath.Join(testDir, "id_ed25519")
+	if _, err := EnsurePrivateKey(privateKeyPath); err != nil {
+		t.Fatal(err)
+	}
+	sshAddress, stopSSH := startForwardingSSHServer(t)
+	defer stopSSH()
+
+	portProbe, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	remoteAddress := portProbe.Addr().String()
+	_ = portProbe.Close()
+
+	tunnel := New(Config{
+		Address:             sshAddress,
+		User:                "test",
+		PrivateKeyPath:      privateKeyPath,
+		HostKeyPinPath:      filepath.Join(testDir, "host.pin"),
+		RemoteListenAddress: remoteAddress,
+		ReconnectDelay:      50 * time.Millisecond,
+	}, nil)
+	statuses := make(chan Status, 8)
+	tunnel.SetOnStatus(func(status Status) {
+		select {
+		case statuses <- status:
+		default:
+		}
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	tunnel.Start(ctx, func(_ context.Context, listener net.Listener) error {
+		conn, err := listener.Accept()
+		if err != nil {
+			return err
+		}
+		defer conn.Close()
+		buffer := make([]byte, 4)
+		if _, err := io.ReadFull(conn, buffer); err != nil {
+			return err
+		}
+		if string(buffer) != "ping" {
+			return io.ErrUnexpectedEOF
+		}
+		_, err = conn.Write([]byte("pong"))
+		return err
+	})
+
+	waitForTunnelStatus(t, statuses, true)
+	external, err := net.DialTimeout("tcp4", remoteAddress, 2*time.Second)
+	if err != nil {
+		t.Fatalf("dial forwarded port: %v", err)
+	}
+	defer external.Close()
+	if _, err := external.Write([]byte("ping")); err != nil {
+		t.Fatal(err)
+	}
+	response := make([]byte, 4)
+	if _, err := io.ReadFull(external, response); err != nil {
+		t.Fatal(err)
+	}
+	if string(response) != "pong" {
+		t.Fatalf("unexpected forwarded response %q", response)
+	}
+}
+
+type forwardRequest struct {
+	Address string
+	Port    uint32
+}
+
+type forwardedPayload struct {
+	Address       string
+	Port          uint32
+	OriginAddress string
+	OriginPort    uint32
+}
+
+func startForwardingSSHServer(t *testing.T) (string, func()) {
+	t.Helper()
+	_, hostPrivate, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hostSigner, err := ssh.NewSignerFromKey(hostPrivate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	serverConfig := &ssh.ServerConfig{
+		PublicKeyCallback: func(ssh.ConnMetadata, ssh.PublicKey) (*ssh.Permissions, error) {
+			return nil, nil
+		},
+	}
+	serverConfig.AddHostKey(hostSigner)
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	var wait sync.WaitGroup
+	wait.Add(1)
+	go func() {
+		defer wait.Done()
+		raw, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer raw.Close()
+		connection, channels, requests, err := ssh.NewServerConn(raw, serverConfig)
+		if err != nil {
+			return
+		}
+		defer connection.Close()
+		go func() {
+			for channel := range channels {
+				_ = channel.Reject(ssh.UnknownChannelType, "no client channels supported")
+			}
+		}()
+		var remoteListener net.Listener
+		defer func() {
+			if remoteListener != nil {
+				_ = remoteListener.Close()
+			}
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case request, ok := <-requests:
+				if !ok {
+					return
+				}
+				if request.Type != "tcpip-forward" {
+					_ = request.Reply(false, nil)
+					continue
+				}
+				var payload forwardRequest
+				if err := ssh.Unmarshal(request.Payload, &payload); err != nil {
+					_ = request.Reply(false, nil)
+					continue
+				}
+				address := net.JoinHostPort(payload.Address, strconv.Itoa(int(payload.Port)))
+				remoteListener, err = net.Listen("tcp4", address)
+				if err != nil {
+					_ = request.Reply(false, nil)
+					continue
+				}
+				_ = request.Reply(true, nil)
+				go forwardAcceptedConnections(connection, remoteListener)
+			}
+		}
+	}()
+	return listener.Addr().String(), func() {
+		cancel()
+		_ = listener.Close()
+		wait.Wait()
+	}
+}
+
+func forwardAcceptedConnections(connection *ssh.ServerConn, listener net.Listener) {
+	for {
+		external, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		go func() {
+			defer external.Close()
+			remoteHost, remotePortText, _ := net.SplitHostPort(listener.Addr().String())
+			originHost, originPortText, _ := net.SplitHostPort(external.RemoteAddr().String())
+			remotePort, _ := strconv.Atoi(remotePortText)
+			originPort, _ := strconv.Atoi(originPortText)
+			channel, requests, err := connection.OpenChannel("forwarded-tcpip", ssh.Marshal(&forwardedPayload{
+				Address:       remoteHost,
+				Port:          uint32(remotePort),
+				OriginAddress: originHost,
+				OriginPort:    uint32(originPort),
+			}))
+			if err != nil {
+				return
+			}
+			defer channel.Close()
+			go ssh.DiscardRequests(requests)
+			copyDone := make(chan struct{}, 2)
+			go func() {
+				_, _ = io.Copy(channel, external)
+				copyDone <- struct{}{}
+			}()
+			go func() {
+				_, _ = io.Copy(external, channel)
+				copyDone <- struct{}{}
+			}()
+			<-copyDone
+		}()
+	}
+}
+
+func waitForTunnelStatus(t *testing.T, statuses <-chan Status, connected bool) Status {
+	t.Helper()
+	timeout := time.After(4 * time.Second)
+	for {
+		select {
+		case status := <-statuses:
+			if status.Connected == connected {
+				return status
+			}
+		case <-timeout:
+			t.Fatalf("timed out waiting for tunnel connected=%t", connected)
+		}
 	}
 }

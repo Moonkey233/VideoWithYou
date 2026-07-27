@@ -16,6 +16,7 @@ try {
     if (-not (Test-Path (Join-Path $extensionDir "node_modules"))) {
       npm ci
     }
+    npm audit --audit-level=high
     npm run typecheck
     npm run build
   } finally {

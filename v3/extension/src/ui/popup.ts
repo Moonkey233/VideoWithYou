@@ -1,6 +1,61 @@
 ﻿const statusEl = document.getElementById("status") as HTMLParagraphElement;
 export {};
 
+if (typeof chrome === "undefined" || !chrome.runtime?.sendMessage) {
+  installPreviewChrome();
+}
+
+function installPreviewChrome() {
+  const preview = new URLSearchParams(window.location.search).get("preview") || "cloud";
+  const cloud = preview === "cloud";
+  const failed = preview === "failed";
+  const owner = preview === "owner";
+  const previewState = {
+    room_code: "V3TEST",
+    role: "follower",
+    members_count: 3,
+    endpoint: "browser",
+    follow_url: true,
+    last_error: "",
+    display_name: "测试成员",
+    host_display_name: "Moonkey",
+    last_sync_time: "2026-07-27 16:00:00",
+    room_events: ["Moonkey 进入了房间", "测试成员 进入了房间"],
+    server_connected: !failed,
+    connection_route: failed ? "" : owner ? "local" : cloud ? "cloud_ipv4" : "ipv6_direct",
+    connection_stage: failed ? "retry_wait" : "connected",
+    direct_error: cloud || failed ? "当前网络没有可用的 IPv6 路由" : "",
+    cloud_error: failed ? "连接云端超时" : "",
+    remote_address: failed
+      ? ""
+      : owner
+        ? "[::1]:21314"
+        : cloud
+          ? "47.104.213.182:21314"
+          : "[2408:8262::1]:21314",
+    latency_ms: cloud ? 48 : 12,
+    server_role_enabled: owner,
+    server_listen_error: "",
+    tunnel_connected: owner,
+    tunnel_error: ""
+  };
+  (globalThis as any).chrome = {
+    runtime: {
+      sendMessage: () => undefined,
+      onMessage: {
+        addListener: (listener: (message: any) => void) => {
+          window.setTimeout(() => listener({ type: "ui_state", payload: previewState }), 0);
+        }
+      }
+    },
+    storage: {
+      local: {
+        get: (defaults: any, callback: (value: any) => void) => callback(defaults)
+      }
+    }
+  };
+}
+
 const roomLabelPrefixEl = document.getElementById("roomLabelPrefix") as HTMLSpanElement;
 const roomCodeEl = document.getElementById("roomCode") as HTMLSpanElement;
 const membersEl = document.getElementById("membersCount") as HTMLSpanElement;

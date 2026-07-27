@@ -172,6 +172,9 @@ func DefaultConfig() Config {
 }
 
 func RuntimeDir() (string, error) {
+	if localAppData := strings.TrimSpace(os.Getenv("LOCALAPPDATA")); localAppData != "" {
+		return filepath.Join(localAppData, "VideoWithYou"), nil
+	}
 	base, err := os.UserConfigDir()
 	if err != nil {
 		return "", err

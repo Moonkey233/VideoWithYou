@@ -308,11 +308,16 @@ func (c *Client) routeAttempts() ([]routeAttempt, error) {
 		if err != nil {
 			return nil, err
 		}
+		localTimeout := c.cfg.DirectTimeout
+		if localTimeout < 15*time.Second {
+			// The first local TLS handshake can trigger ACME issuance.
+			localTimeout = 15 * time.Second
+		}
 		attempts = append(attempts, routeAttempt{
 			route:       RouteLocal,
 			network:     "tcp6",
 			dialAddress: net.JoinHostPort("::1", port),
-			timeout:     c.cfg.DirectTimeout,
+			timeout:     localTimeout,
 		})
 	}
 	attempts = append(attempts, routeAttempt{

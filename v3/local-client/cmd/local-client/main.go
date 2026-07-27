@@ -30,6 +30,9 @@ const version = "3.0.0"
 
 func main() {
 	if err := run(); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return
+		}
 		fmt.Fprintf(os.Stderr, "VideoWithYou 启动失败: %v\n", err)
 	}
 }

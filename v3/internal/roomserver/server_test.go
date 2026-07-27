@@ -91,6 +91,46 @@ func TestAccessTokenRejected(t *testing.T) {
 	}
 }
 
+func TestHostRoomClosesAfterReconnectGrace(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	server := New(Config{
+		ReconnectGrace:  100 * time.Millisecond,
+		HostIdleTimeout: time.Minute,
+	}, nil)
+	server.Start(ctx)
+	httpServer := httptest.NewServer(serverHandler(server))
+	defer httpServer.Close()
+	wsURL := "ws" + strings.TrimPrefix(httpServer.URL, "http")
+
+	host, _ := connectTestClient(t, wsURL, "expiring-host", "")
+	sendTestEnvelope(t, host, &videowithyoupb.Envelope{
+		Payload: &videowithyoupb.Envelope_CreateRoomReq{
+			CreateRoomReq: &videowithyoupb.CreateRoomReq{},
+		},
+	})
+	create := waitForEnvelope(t, host, func(env *videowithyoupb.Envelope) bool {
+		return env.GetCreateRoomResp() != nil
+	}).GetCreateRoomResp()
+	follower, _ := connectTestClient(t, wsURL, "remaining-follower", "")
+	defer follower.Close()
+	sendTestEnvelope(t, follower, &videowithyoupb.Envelope{
+		Payload: &videowithyoupb.Envelope_JoinRoomReq{
+			JoinRoomReq: &videowithyoupb.JoinRoomReq{RoomCode: create.GetRoomCode()},
+		},
+	})
+	waitForEnvelope(t, follower, func(env *videowithyoupb.Envelope) bool {
+		return env.GetJoinRoomResp() != nil
+	})
+	_ = host.Close()
+	closed := waitForEnvelope(t, follower, func(env *videowithyoupb.Envelope) bool {
+		return env.GetErrorResp() != nil
+	}).GetErrorResp()
+	if closed.GetMessage() != "room closed (host left)" {
+		t.Fatalf("unexpected close reason %q", closed.GetMessage())
+	}
+}
+
 func serverHandler(server *Server) *testHandler {
 	return &testHandler{server: server}
 }

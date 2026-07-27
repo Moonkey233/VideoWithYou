@@ -1,86 +1,105 @@
 # VideoWithYou v3
 
-Multi-part system for synchronized video playback. The extension only talks to the local client (local WebSocket); the local client talks to the server (WebSocket with protobuf).
+VideoWithYou v3 是一个多人同步看视频工具。Windows 端只有一个主程序
+`VideoWithYou.exe`，可同时承担以下角色：
 
-## Structure
+- 浏览器扩展的本地桥接
+- 视频同步客户端
+- Windows 房间服务端（仅服主配置启用）
+- IPv6 公网直连入口
+- 到 Linux 云服务器的 SSH IPv4 反向转发
+- 自动 TLS 证书签发、续期、日志和故障回退
 
-- `proto/` Protobuf definitions and generated Go code
-- `server/` Go WebSocket server
-- `local-client/` Go local client + extension bridge
-- `extension/` MV3 extension (TypeScript + Vite)
-- `scripts/` build + install helpers
+## 连接架构
 
-## Build (Windows)
-
-From `v2/`:
-
+```text
+普通客户端
+  ├─ IPv6 可用 ───────────> ipv6.moonkey.top:21314 ─┐
+  └─ IPv6 失败 -> moonkey.top:21314 -> SSH 隧道 ───┤
+                                                     v
+                                        同一个 Windows 房间服务
 ```
+
+IPv6 直连和 IPv4 云转发最终进入同一个房间服务，因此不会出现两边房间号、
+成员或播放状态不一致的问题。云服务器只转发直连失败用户的加密流量。
+
+## 端口
+
+| 位置 | 端口 | 用途 |
+|---|---:|---|
+| Windows 本机 | TCP 23333 | 浏览器扩展连接本地 EXE，仅监听 127.0.0.1 |
+| Windows 公网 IPv6 | TCP 21314 | WSS 视频同步服务 |
+| Windows 公网 IPv6 | TCP 80 | ACME 自动签发和续期 |
+| Linux 云公网 IPv4 | TCP 21314 | IPv4 回退入口，经 SSH 转发回 Windows |
+| Linux 云服务器 | TCP 22 | Windows 建立 SSH 反向隧道 |
+
+v2 使用的 9012 不受 v3 影响。
+
+## 快速入口
+
+- [Windows 安装、服主配置和朋友安装](docs/INSTALL_WINDOWS.md)
+- [Linux 云端 IPv4 转发配置](docs/CLOUD_RELAY.md)
+- [故障排查](docs/TROUBLESHOOTING.md)
+- [测试和验收记录](docs/TESTING.md)
+- [开发与构建](scripts/dev_readme.md)
+
+## 常用命令
+
+```powershell
+# 安装到当前用户目录，可选开机启动
+.\VideoWithYou-v3-windows-amd64.exe --install --autostart
+
+# 将本机初始化为 Windows 服务端 + 客户端
+VideoWithYou.exe --init-owner
+
+# 普通客户端导入服主发来的连接配置
+VideoWithYou.exe --import-profile .\VideoWithYou-client.vwyprofile
+
+# 重新释放浏览器扩展并显示目录
+VideoWithYou.exe --extract-extension
+
+# 导出新的普通客户端配置
+VideoWithYou.exe --export-profile .\VideoWithYou-client.vwyprofile
+```
+
+配置、证书、SSH 密钥、扩展和日志默认位于：
+
+```text
+%LOCALAPPDATA%\VideoWithYou
+```
+
+程序不会因 DNS、IPv6、云端、证书、SSH 隧道或监听端口等可恢复错误闪退。
+控制台、日志和扩展 UI 会分别显示 IPv6 失败原因、云端失败原因及当前线路。
+
+## 证书
+
+公网线路默认使用 WSS。证书通过 Go `autocert` 自动申请、缓存和续期。朋友端
+不安装证书，也不需要按证书周期重新导入配置。服主只需长期保持：
+
+- `ipv6.moonkey.top` 的 AAAA 指向当前 Windows 公网 IPv6
+- IPv6 TCP 80 和 21314 能从公网访问
+
+## 源码结构
+
+- `internal/roomserver`：共享房间服务与断线恢复
+- `internal/hostserver`：Windows IPv6/WSS 和 ACME
+- `internal/sshtunnel`：内嵌 SSH 反向转发
+- `local-client`：同步客户端、本地浏览器桥、Browser/MPC-BE 适配
+- `extension`：Chrome/Edge Manifest V3 扩展
+- `server/cmd/server`：仅供开发和回滚的独立兼容服务端
+- `scripts`：构建、云端配置和网络验证
+
+## 构建
+
+```powershell
+cd v3
 .\scripts\build.ps1
 ```
 
-This builds `bin/server.exe`, `bin/local-client.exe`, and `bin/server-linux`.
+脚本会执行扩展类型检查、扩展构建、Go 测试、Go Vet、Windows EXE 构建、
+Linux 兼容服务端构建，并生成 SHA-256：
 
-## Run
-
-1) Start server:
-
-```
-./bin/server.exe
-```
-
-2) Build the extension:
-
-```
-cd extension
-npm install
-npm run build
-```
-
-3) Load extension:
-- Edge/Chrome -> Extensions -> Load unpacked -> `v2/extension/dist`
-
-4) Start local client manually:
-
-```
-./bin/local-client.exe
-```
-
-Open the popup in the browser to create/join rooms.
-
-## Local Client Config
-
-Edit `v2/local-client/config.json`:
-
-- `endpoint`: `browser` or `mpc`
-- `follow_url`: only applies for `browser`
-- `ext_listen_addr` / `ext_listen_path`: extension bridge endpoint
-- `ext_idle_timeout_sec`: browser endpoint idle window (0 disables)
-- `endpoint_inactive_timeout_sec`: follower leave timeout after endpoint missing (0 disables)
-- Sync knobs: `tick_ms`, `deadzone_ms`, `hard_seek_threshold_ms`, `soft_rate_*`, `offset_ms`
-- MPC-BE (Web UI):
-  - Enable Web UI in MPC-BE settings (Web Interface) and set a port.
-  - `mpc.base_url`: MPC-BE Web UI base URL (e.g. `http://127.0.0.1:13579`)
-  - `mpc.variables_path`: defaults to `/variables.html`
-  - `mpc.commands.*`: command templates (relative or absolute). Use `POST /path|body` for form posts. Placeholders: `{ms}`, `{sec}`, `{hhmmss}`, `{hhmmssms}`, `{rate}`.
-  - MPC mode does not sync playback rate (pause/seek only).
-
-The client will persist config updates triggered from the UI.
-
-## Multi-Client Local Test
-
-Run each local client on a different port via `ext_listen_addr` (e.g. `127.0.0.1:23333` and `127.0.0.1:23334`), then set the extension popup `Client Port` to match in each browser (Edge/Chrome).
-
-## Notes
-
-- `apply_state.position_ms` uses `-1` to signal "no seek" for rate-only adjustments.
-- Time sync uses NTP-style 4 timestamps; initial 5 samples pick the lowest-delay offset.
-- MPC-BE integration uses its Web UI. If commands do not work, adjust `mpc.commands` based on your MPC-BE Web UI.
-- Server closes rooms if the host stops reporting for `-host_idle_timeout_sec` (default 600s).
-
-## Protobuf
-
-If you change the schema:
-
-```
-protoc --proto_path=proto --plugin=protoc-gen-go=$env:GOPATH\bin\protoc-gen-go.exe --go_out=proto/gen --go_opt=paths=source_relative videowithyou.proto
+```text
+v3\release\VideoWithYou-v3-windows-amd64.exe
+v3\release\VideoWithYou-v3-windows-amd64.sha256
 ```

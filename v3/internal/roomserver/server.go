@@ -355,6 +355,7 @@ func (s *Server) handleJoinRoom(session *Session, req *videowithyoupb.JoinRoomRe
 	session.isHost = false
 	session.active = true
 	hostID := room.hostID
+	latestState := room.latestState
 	s.mu.Unlock()
 
 	s.log.Printf("[服务端] 成员加入 room=%s code=%s member=%s", roomID, code, session.id)
@@ -368,8 +369,8 @@ func (s *Server) handleJoinRoom(session *Session, req *videowithyoupb.JoinRoomRe
 		},
 	})
 	s.broadcastRoomSnapshot(room)
-	if room.latestState != nil {
-		s.broadcastHostState(room, room.latestState)
+	if latestState != nil {
+		s.broadcastHostState(room, latestState)
 	}
 }
 
@@ -543,7 +544,15 @@ func (s *Server) detachPeer(p *peer) {
 }
 
 func (s *Server) removeSessionFromRoom(session *Session, explicit bool) {
+	s.removeSessionFromRoomWhen(session, explicit, nil)
+}
+
+func (s *Server) removeSessionFromRoomWhen(session *Session, explicit bool, guard func(*Session) bool) {
 	s.mu.Lock()
+	if guard != nil && !guard(session) {
+		s.mu.Unlock()
+		return
+	}
 	room := s.rooms[session.roomID]
 	if room == nil {
 		session.roomID = ""
@@ -609,7 +618,12 @@ func (s *Server) expireDisconnected(now time.Time) {
 	s.mu.RUnlock()
 	for _, session := range expired {
 		s.log.Printf("[服务端] 会话恢复超时 client_id=%s", session.id)
-		s.removeSessionFromRoom(session, false)
+		s.removeSessionFromRoomWhen(session, false, func(current *Session) bool {
+			return !current.connected &&
+				current.roomID != "" &&
+				!current.disconnectedAt.IsZero() &&
+				now.Sub(current.disconnectedAt) >= s.cfg.ReconnectGrace
+		})
 	}
 }
 
