@@ -40,7 +40,7 @@ Test-NetConnection moonkey.top -Port 21314
 
 ## 本地 CA 或证书错误
 
-v3.0.1 不再连接外部 ACME，也不需要 TCP 80。服主证书目录：
+v3.0.1 及以上版本不再连接外部 ACME，也不需要 TCP 80。服主证书目录：
 
 ```text
 %LOCALAPPDATA%\VideoWithYou\certs
@@ -59,7 +59,18 @@ server-key.pem
 `server.tls` 路径为准。旧文件会保留，不参与当前运行。
 
 如果朋友端显示 `unknown authority`、`tls_certificate` 或“缺少服主 CA”，通常
-是导入了 v3.0.0 的旧 profile。服主使用 v3.0.1 重新导出，朋友重新导入。
+是导入了 v3.0.0 的旧 profile。服主使用当前版本重新导出，朋友重新导入。
+
+## 完全没有 IPv6 时云线路 TCP 成功但 WebSocket 超时
+
+如果朋友日志是 `read tcp4 ...:21314: i/o timeout`，同时服主日志出现：
+
+```text
+ssh: tcpChan: deadline not supported
+```
+
+这是 v3.0.1 的云代理缺陷。服主和朋友都升级到 v3.0.2；无需重新导入 v2
+profile，也无需修改证书、防火墙或云服务器配置。
 
 不要把 `owner-ca-key.pem` 发给任何人，也不要只删除其中一个 CA 文件。CA
 证书和私钥不完整时程序会拒绝生成新身份，避免现有朋友遭遇静默信任变更。

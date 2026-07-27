@@ -4,8 +4,12 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
 	"io"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -13,7 +17,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"golang.org/x/crypto/ssh"
+
+	"videowithyou/v3/internal/localcert"
 )
 
 func TestEnsurePrivateKeyIsStable(t *testing.T) {
@@ -112,6 +119,109 @@ func TestSSHRemoteForwardEndToEnd(t *testing.T) {
 	}
 	if string(response) != "pong" {
 		t.Fatalf("unexpected forwarded response %q", response)
+	}
+}
+
+func TestSSHRemoteForwardProxiesWSSWithLocalCA(t *testing.T) {
+	generated, err := localcert.Ensure(localcert.Config{
+		Domain:    "owner.invalid",
+		Directory: t.TempDir(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pair, err := tls.LoadX509KeyPair(generated.CertFile, generated.KeyFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	upgrader := websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
+	localServer := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, upgradeErr := upgrader.Upgrade(w, r, nil)
+		if upgradeErr != nil {
+			t.Errorf("upgrade: %v", upgradeErr)
+			return
+		}
+		defer conn.Close()
+		messageType, payload, readErr := conn.ReadMessage()
+		if readErr != nil {
+			return
+		}
+		_ = conn.WriteMessage(messageType, payload)
+	}))
+	localServer.TLS = &tls.Config{
+		MinVersion:   tls.VersionTLS12,
+		Certificates: []tls.Certificate{pair},
+	}
+	localServer.StartTLS()
+	defer localServer.Close()
+	localTarget := strings.TrimPrefix(localServer.URL, "https://")
+
+	testDir := t.TempDir()
+	privateKeyPath := filepath.Join(testDir, "id_ed25519")
+	if _, err := EnsurePrivateKey(privateKeyPath); err != nil {
+		t.Fatal(err)
+	}
+	sshAddress, stopSSH := startForwardingSSHServer(t)
+	defer stopSSH()
+	portProbe, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	remoteAddress := portProbe.Addr().String()
+	_ = portProbe.Close()
+
+	tunnel := New(Config{
+		Address:             sshAddress,
+		User:                "test",
+		PrivateKeyPath:      privateKeyPath,
+		HostKeyPinPath:      filepath.Join(testDir, "host.pin"),
+		RemoteListenAddress: remoteAddress,
+		ReconnectDelay:      50 * time.Millisecond,
+	}, nil)
+	statuses := make(chan Status, 8)
+	tunnel.SetOnStatus(func(status Status) {
+		select {
+		case statuses <- status:
+		default:
+		}
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	tunnel.Start(ctx, func(proxyCtx context.Context, listener net.Listener) error {
+		return ProxyListener(proxyCtx, listener, "tcp4", localTarget, nil)
+	})
+	waitForTunnelStatus(t, statuses, true)
+
+	roots := x509.NewCertPool()
+	if !roots.AppendCertsFromPEM([]byte(generated.CAPEM)) {
+		t.Fatal("could not load generated CA")
+	}
+	netDialer := &net.Dialer{Timeout: 2 * time.Second}
+	dialer := websocket.Dialer{
+		HandshakeTimeout: 2 * time.Second,
+		TLSClientConfig: &tls.Config{
+			MinVersion: tls.VersionTLS12,
+			ServerName: "owner.invalid",
+			RootCAs:    roots,
+		},
+		NetDialContext: func(dialCtx context.Context, _, _ string) (net.Conn, error) {
+			return netDialer.DialContext(dialCtx, "tcp4", remoteAddress)
+		},
+	}
+	conn, _, err := dialer.Dial("wss://owner.invalid/ws", nil)
+	if err != nil {
+		t.Fatalf("dial WSS through SSH proxy: %v", err)
+	}
+	defer conn.Close()
+	if err := conn.WriteMessage(websocket.TextMessage, []byte("cloud")); err != nil {
+		t.Fatal(err)
+	}
+	_, response, err := conn.ReadMessage()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(response) != "cloud" {
+		t.Fatalf("unexpected WebSocket response %q", response)
 	}
 }
 

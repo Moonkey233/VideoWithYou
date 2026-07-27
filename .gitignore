@@ -2,4 +2,6 @@ cert
 **/node_modules/
 **/extension/dist/
 v3/bin/
+v3/release/*.7z
+v3/release/*.vwyprofile
 *.log

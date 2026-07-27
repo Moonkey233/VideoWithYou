@@ -44,8 +44,9 @@ sudo bash setup-cloud-relay.sh ./id_ed25519.pub
 入方向 TCP 21314，来源 0.0.0.0/0
 ```
 
-不需要在云端或 Windows 开放 TCP 80。WSS 由服主本地 CA 签发，云端只转发
-已经加密的原始连接。
+不需要在云端或 Windows 开放 TCP 80。WSS 由服主本地 CA 签发。云端收到的
+加密连接通过 SSH Channel 返回 Windows，再由 EXE 代理到本机真实 TCP
+`[::1]:21314`；HTTP/WebSocket 不直接运行在 SSH Channel 上。
 
 ## 验证
 
@@ -68,6 +69,12 @@ Test-NetConnection moonkey.top -Port 21314
 ```
 
 应显示 `TcpTestSucceeded : True`，扩展显示“IPv4 云转发”。
+
+仅 `TcpTestSucceeded` 还不能证明 WebSocket 可用。v3.0.2 启动日志还应包含：
+
+```text
+[隧道] IPv4 云转发目标 target=[::1]:21314
+```
 
 ## 与 v2 并行迁移
 

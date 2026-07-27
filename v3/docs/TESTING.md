@@ -25,6 +25,7 @@ npm run build
 - 云线路连接成功后仍保留 IPv6 失败原因
 - SSH Ed25519 密钥生成与稳定加载
 - SSH 主机密钥首次信任和变化拒绝
+- 不支持 deadline 的真实 SSH Channel 代理到本机 TCP 后完成 WSS 升级和双向消息
 - 本地 CA 稳定生成、域名验证和服务端证书续期判断
 - profile 携带公开 CA 且不携带 CA 私钥
 - IPv4 云回退使用 profile CA 完成 WSS 验证
@@ -71,13 +72,14 @@ npm run build
 - 真实 Windows 本机 `route=local` 和 ECDSA P-256 TLS
 - `ipv6.moonkey.top:21314` 的 IPv6 TCP/TLS
 - `moonkey.top:21314` 经 SSH 反向转发的 IPv4 TCP/TLS
+- `moonkey.top:21314` 经 SSH 反向转发返回 `101 Switching Protocols`
 - v2 `.vwyprofile` 隔离导入
 
 发布文件：
 
 ```text
 VideoWithYou-v3-windows-amd64.exe
-SHA256 e40c5187a1d89c0c1bcb7311dcd5a14d5c7ed6051bae0663c9a5de8720142409
+SHA256 22ee71f1afa03ee08c424517f7f8bf3bc3bd871e2c668b5031df90bb0ea89ee5
 ```
 
 公网验证使用现有 Windows 防火墙、DDNS、云服务器 `sshd` 与安全组；未修改

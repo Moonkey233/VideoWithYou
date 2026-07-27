@@ -8,6 +8,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
@@ -160,6 +161,83 @@ func (t *Tunnel) connect(ctx context.Context) (net.Listener, *ssh.Client, string
 		return nil, nil, hostPin, fmt.Errorf("request remote listener %s: %w", t.cfg.RemoteListenAddress, err)
 	}
 	return listener, client, hostPin, nil
+}
+
+// ProxyListener forwards connections accepted from the SSH remote listener to
+// a real local TCP socket. x/crypto/ssh channel connections do not implement
+// deadlines, so net/http and WebSocket servers must not serve them directly.
+func ProxyListener(ctx context.Context, listener net.Listener, targetNetwork, targetAddress string, logger *log.Logger) error {
+	if listener == nil {
+		return errors.New("proxy listener is nil")
+	}
+	if strings.TrimSpace(targetAddress) == "" {
+		return errors.New("proxy target address is empty")
+	}
+	if logger == nil {
+		logger = log.Default()
+	}
+
+	proxyCtx, cancelProxy := context.WithCancel(ctx)
+	stopClosing := make(chan struct{})
+	defer close(stopClosing)
+	go func() {
+		select {
+		case <-proxyCtx.Done():
+			_ = listener.Close()
+		case <-stopClosing:
+		}
+	}()
+
+	var connections sync.WaitGroup
+	defer func() {
+		cancelProxy()
+		_ = listener.Close()
+		connections.Wait()
+	}()
+	for {
+		remote, err := listener.Accept()
+		if err != nil {
+			if ctx.Err() != nil || errors.Is(err, net.ErrClosed) {
+				return nil
+			}
+			return fmt.Errorf("accept SSH forwarded connection: %w", err)
+		}
+		connections.Add(1)
+		go func() {
+			defer connections.Done()
+			proxyConnection(proxyCtx, remote, targetNetwork, targetAddress, logger)
+		}()
+	}
+}
+
+func proxyConnection(ctx context.Context, remote net.Conn, targetNetwork, targetAddress string, logger *log.Logger) {
+	local, err := (&net.Dialer{Timeout: 5 * time.Second, KeepAlive: 30 * time.Second}).DialContext(ctx, targetNetwork, targetAddress)
+	if err != nil {
+		logger.Printf("[隧道] 云转发连接本机服务失败 target=%s error=%q", targetAddress, err)
+		_ = remote.Close()
+		return
+	}
+
+	copyDone := make(chan error, 2)
+	go func() {
+		_, copyErr := io.Copy(local, remote)
+		copyDone <- copyErr
+	}()
+	go func() {
+		_, copyErr := io.Copy(remote, local)
+		copyDone <- copyErr
+	}()
+
+	select {
+	case <-ctx.Done():
+	case <-copyDone:
+	}
+	_ = remote.Close()
+	_ = local.Close()
+	select {
+	case <-copyDone:
+	case <-time.After(time.Second):
+	}
 }
 
 func EnsurePrivateKey(path string) (string, error) {

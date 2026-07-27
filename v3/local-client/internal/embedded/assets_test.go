@@ -22,7 +22,7 @@ func TestEmbeddedExtensionExtractsV3Manifest(t *testing.T) {
 	if err := json.Unmarshal(data, &manifest); err != nil {
 		t.Fatal(err)
 	}
-	if manifest.Version != "3.0.1" {
+	if manifest.Version != "3.0.2" {
 		t.Fatalf("unexpected embedded extension version %q", manifest.Version)
 	}
 }

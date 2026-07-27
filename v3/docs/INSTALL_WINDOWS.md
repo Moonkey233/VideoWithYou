@@ -173,7 +173,7 @@ VideoWithYou.exe --extract-extension
 
 ## 五、从 v3.0.0 升级
 
-先退出旧进程，再用 v3.0.1 发布文件执行：
+先退出旧进程，再用最新 v3 发布文件执行：
 
 ```powershell
 .\VideoWithYou-v3-windows-amd64.exe --install
@@ -192,3 +192,14 @@ profile 格式从 v1 升级为 v2，朋友必须重新导入这份更新后的 p
 & "$env:LOCALAPPDATA\Programs\VideoWithYou\VideoWithYou.exe" `
   --import-profile ".\VideoWithYou-client.vwyprofile"
 ```
+
+## 六、从 v3.0.1 升级到 v3.0.2
+
+服主和朋友都先退出正在运行的 EXE，再执行：
+
+```powershell
+.\VideoWithYou-v3-windows-amd64.exe --install
+```
+
+然后重新启动安装目录中的 `VideoWithYou.exe`。本次只修复 IPv4 云回退代理，
+profile 仍为 v2，朋友不需要重新导入，云服务器也不需要重新配置。

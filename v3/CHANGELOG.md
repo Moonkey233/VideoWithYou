@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.0.2
+
+- 修复完全没有 IPv6 的客户端连接 IPv4 云回退后 WebSocket 超时
+- SSH 远端连接改为代理到本机真实 TCP `[::1]:21314`，不再直接承载 HTTP/WebSocket
+- profile CA 继续验证 `ipv6.moonkey.top`，IPv4 云线路不依赖客户端 IPv6 或 AAAA 解析
+- 增加真实 SSH Channel、ECDSA 本地 CA、WSS 协议升级与双向消息回归测试
+- profile 仍为 v2，v3.0.1 客户端升级 EXE 后无需重新导入
+
 ## 3.0.1
 
 - 公网 TLS 改为服主本地 ECDSA P-256 CA 签发，客户端通过 profile 内置 CA 验证

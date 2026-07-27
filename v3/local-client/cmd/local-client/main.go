@@ -27,7 +27,7 @@ import (
 	"videowithyou/v3/local-client/internal/extws"
 )
 
-const version = "3.0.1"
+const version = "3.0.2"
 
 func main() {
 	if err := run(); err != nil {
@@ -243,21 +243,29 @@ func runApplication(cfg config.Config, configPath string, logger *log.Logger) er
 			logger.Printf("[隧道] SSH 密钥不可用 error=%q", err)
 			localClient.SetTunnelStatus(false, err.Error())
 		} else {
-			_ = os.WriteFile(cfg.Relay.PrivateKeyPath+".pub", []byte(publicKey+"\n"), 0o600)
-			tunnel := sshtunnel.New(sshtunnel.Config{
-				Address:             cfg.Relay.SSHAddress,
-				User:                cfg.Relay.SSHUser,
-				PrivateKeyPath:      cfg.Relay.PrivateKeyPath,
-				HostKeyPinPath:      cfg.Relay.HostKeyPinPath,
-				RemoteListenAddress: cfg.Relay.RemoteListenAddress,
-				ReconnectDelay:      time.Duration(cfg.Relay.ReconnectDelaySec) * time.Second,
-			}, logger)
-			tunnel.SetOnStatus(func(status sshtunnel.Status) {
-				localClient.SetTunnelStatus(status.Connected, status.Error)
-			})
-			tunnel.Start(ctx, func(tunnelCtx context.Context, listener net.Listener) error {
-				return hosted.ServeListener(tunnelCtx, listener, "cloud_ipv4")
-			})
+			_, serverPort, splitErr := net.SplitHostPort(cfg.Server.ListenAddress)
+			if splitErr != nil {
+				logger.Printf("[隧道] 本机服务监听地址无效 address=%s error=%q", cfg.Server.ListenAddress, splitErr)
+				localClient.SetTunnelStatus(false, splitErr.Error())
+			} else {
+				localTarget := net.JoinHostPort("::1", serverPort)
+				_ = os.WriteFile(cfg.Relay.PrivateKeyPath+".pub", []byte(publicKey+"\n"), 0o600)
+				tunnel := sshtunnel.New(sshtunnel.Config{
+					Address:             cfg.Relay.SSHAddress,
+					User:                cfg.Relay.SSHUser,
+					PrivateKeyPath:      cfg.Relay.PrivateKeyPath,
+					HostKeyPinPath:      cfg.Relay.HostKeyPinPath,
+					RemoteListenAddress: cfg.Relay.RemoteListenAddress,
+					ReconnectDelay:      time.Duration(cfg.Relay.ReconnectDelaySec) * time.Second,
+				}, logger)
+				tunnel.SetOnStatus(func(status sshtunnel.Status) {
+					localClient.SetTunnelStatus(status.Connected, status.Error)
+				})
+				logger.Printf("[隧道] IPv4 云转发目标 target=%s", localTarget)
+				tunnel.Start(ctx, func(tunnelCtx context.Context, listener net.Listener) error {
+					return sshtunnel.ProxyListener(tunnelCtx, listener, "tcp6", localTarget, logger)
+				})
+			}
 		}
 	}
 
